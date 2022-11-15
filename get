@@ -1,0 +1,3 @@
+#!/bin/rc
+
+hget -r 'Accept: application/ld+json;profile="https://www.w3.org/ns/activitystreams"' $*

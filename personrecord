@@ -1,0 +1,31 @@
+#!/bin/rc
+
+cat > tmp
+
+# Section 3.1
+# all objects MUST have unique global identifiers
+# MUST have globally unique id, type
+id=`{cat tmp | fedi9/extractkey id}
+type=`{cat tmp | fedi9/extractkey type}
+
+# MUST have Inbox, outbox
+inbox=`{cat tmp | fedi9/extractkey inbox}
+outbox=`{cat tmp | fedi9/extractkey outbox}
+
+# SHOULD HAVE following, followers
+following=`{cat tmp | fedi9/extractkey following}
+followers=`{cat tmp | fedi9/extractkey followers}
+
+# These may or may not exist
+preferredUsername=`{cat tmp | fedi9/extractkey preferredUsername}
+name=(`{cat tmp | fedi9/extractkey name})
+rm tmp
+
+uuid=`{fedi9/newuuid}
+
+echo id'='$id type'='$type
+echo '	' inbox'='$inbox outbox'='$outbox
+echo '	' following'='$following followers'='$followers
+echo '	' preferredUsername'="'$"preferredUsername"
+echo '	' name'="'$"name"
+echo '	' uuid'='$"uuid

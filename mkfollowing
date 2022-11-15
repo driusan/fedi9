@@ -1,0 +1,32 @@
+#!/bin/rc
+
+following=`{ndb/query -f me.db type Person following}
+
+fedi9/get $following > tmp.json
+first=`{cat tmp.json | fedi9/extractkey first}
+echo $first $#first
+rm tmp.json
+
+fn parsePage {
+	items=`{cat page.json | fedi9/extractkey orderedItems}
+
+	for (person in $items) {
+		fedi9/get $"person > person.json
+		echo 'Person: ' $"person
+		cat person.json | fedi9/personrecord >> following.db
+		rm person.json
+	}
+}
+if (~ $#first 1) {
+	echo $"first
+	get $"first > page.json
+	parsePage
+
+	next=`{cat page.json | fedi9/extractkey next}
+	while(~ $#next 1) {
+ 		echo $"next
+		get $"next > page.json
+		parsePage
+		next=`{cat page.json | fedi9/extractkey next}
+	}
+}
