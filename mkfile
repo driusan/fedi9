@@ -4,7 +4,8 @@ BIN=/$objtype/bin/fedi9
 TARG=\
 	extractkey\
 	newuuid\
-	getoutbox
+	getoutbox\
+	fs
 
 RC=\
 	personrecord\
