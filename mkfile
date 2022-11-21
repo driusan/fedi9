@@ -12,7 +12,7 @@ RC=\
 	get\
 	validateincoming
 
-OFILES=readfile.$O uuid.$O
+OFILES=readfile.$O uuid.$O outbox.$O
 
 HFILES=readfile.h uuid.h
 
