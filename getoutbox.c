@@ -7,6 +7,7 @@
 
 #include "readfile.h"
 #include "uuid.h"
+#include "getoutbox.h"
 
 int openwebfs(int *fd) {
 	char buf[1000];
@@ -31,9 +32,9 @@ JSON* getjson(int conn, char *url) {
 	char webfspath[2048];
 	int fd;
 	sprintf(webfspath, "/mnt/web/%d/ctl", conn);
-	print("getjson webfs: %s\n", webfspath);
+//	print("getjson webfs: %s\n", webfspath);
 	fd = open(webfspath, OWRITE);
-	print("Opening %s\n", webfspath);
+//	print("Opening %s\n", webfspath);
 	fprint(fd, "url %s\n", url);
 	fprint(fd, "headers Accept: application/ld+json;profile=\"https://www.w3.org/ns/activitystreams\"\n");
 	
@@ -171,33 +172,36 @@ int Nfmt(Fmt *f) {
 	return fmtprint(f, "%s", formatted);
 }
 
-void cachecollectionpage(JSON *page) {
+outboxRetrievalStats cachecollectionpage(JSON *page) {
 	char abspath[1024];
 	char objdb[1024];
+	outboxRetrievalStats rv;
+
 	JSON *orderedItems = jsonbyname(page, "orderedItems");
 	JSON *id, *objtype;
 	assert(orderedItems->t == JSONArray);
 	JSON *object;
 	int ofd;
 	sprint(objdb, "%s/lib/fedi9/objects.db", getenv("home"));
+
 	if (access(objdb, AEXIST) == 0) {
-		fprint(2, "Open %s", objdb);
+		// fprint(2, "Open %s", objdb);
 		ofd = open(objdb, OWRITE);
 		seek(ofd,0,2);
 	} else {
 		fprint(2, "Create %s\n", objdb);
 		ofd = create(objdb, OWRITE, 0644);
 	}
-	
+	memset(&rv, 0, sizeof(rv));
 	Ndb* db = ndbopen(objdb);
 
 	NoteObject* noteobject;
 	for(JSONEl *cur = orderedItems->first; cur != nil; cur = cur->next) {
 		object = jsonbyname(cur->val, "object");
 
-
 		id = jsonbyname(object, "id");
 		if (id == nil) {
+			rv.nshares++;
 			// fprint(2, "No id for object");
 			// no id in the object, was probably an Announce
 			continue;
@@ -207,7 +211,11 @@ void cachecollectionpage(JSON *page) {
 			assert(objtype->t == JSONString);
 			if (strcmp(objtype->s, "Note") == 0) {
 				noteobject = json2newnoteobject(object);
-		
+				if (noteobject->nInReplyTo == 0) {
+					rv.nposts++;
+				} else {
+					rv.nreplies++;
+				}
 				sprint(abspath, "%s/lib/fedi9/%s", getenv("home"), noteobject->cachepath);
 				// create cache
 				int fd = create(abspath, OWRITE, 0664);
@@ -224,23 +232,37 @@ void cachecollectionpage(JSON *page) {
 			}
 
 		} else {
-			fprint(2, "id %s already cached\n", id->s);
+			// fprint(2, "id %s already cached\n", id->s);
+			ndbclose(db);
+			close(ofd);
+			return rv;
 		}
 	}
 	ndbclose(db);
 	close(ofd);
+	return rv;
 }
-void cachecollection(int conn, JSON *root) {
-	print("getcollectionpage %d %J\n", conn, root);
+outboxRetrievalStats cachecollection(int conn, JSON *root) {
+	outboxRetrievalStats rv, pagestats;
+//	print("getcollectionpage %d %J\n", conn, root);
 	JSON *cur = jsonbyname(root, "first");
 	JSON *items;
 
+	memset(&rv, 0, sizeof(rv));
 	while(cur != nil) {
 		items = getjson(conn, cur->s);
-		cachecollectionpage(items);
+		pagestats = cachecollectionpage(items);
+		rv.nreplies += pagestats.nreplies;
+		rv.nposts += pagestats.nposts;
+		rv.nshares += pagestats.nshares;
 		cur = jsonbyname(items, "next");
 		free(items);
+
+		if (pagestats.nreplies == 0 && pagestats.nposts == 0 && pagestats.nshares == 0) {
+			return rv;
+		}
 	}
+	return rv;
 }
 
 #pragma
@@ -268,44 +290,14 @@ void main(int argc, char *argv[]) {
 	if (field->t != JSONString || strcmp(field->s, argv[1]) != 0) {
 		exits("id mismatch");
 	}
-	print("conN 2: %d\n", conN);
-	cachecollection(conN, js);
+//	print("conN 2: %d\n", conN);
+	outboxRetrievalStats stats = cachecollection(conN, js);
+	
 	// iterate through pages until we've seen something
 	
-	print("%J\n", js);
+//	print("%J\n", js);
 	free(js);
 	close(webfd);
+	print("%d new posts, %d new replies\n", stats.nposts, stats.nreplies);
 	exits("");
-	/*
-	char *buf = readfile(0);
-	JSON* root = jsonparse(buf);
-	if (root == nil) {
-		exits("badjson");
-	}
-	JSON* field = jsonbyname(root, argv[1]);
-	if (field == nil) {
-		exits("no field");
-	}
-
-	JSONfmtinstall();
-	if (field->t == JSONString) {
-		// don't use %J to avoid quotation marks
-		print("%s", field->s);
-	} else if (field->t == JSONArray) {
-		for(JSONEl *cur = field->first; cur != nil; cur = cur->next) {
-			if (cur->val->t == JSONString) {
-				print("%s\n", cur->val->s);
-			} else {
-				print("%J\n", cur->val);
-			}
-		
-		}
-	} else {
-	
-		print("%J\n", field);
-	}
-	free(field);
-	free(root);
-	exits("");
-*/
 }
