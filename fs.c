@@ -26,29 +26,30 @@ typedef struct Person {
 
 typedef struct {
 	enum{
-		outbox,
-		inbox,
-		following,
-		followers,
-		name,
-		preferredUsername,
-		id,
+		ActorFile,
 		PostFile
 	} filetype;
+	char *filename;
 	union {
 		Person *p;
 		struct {
-			char *filename;
 			char *cachefile;
 			Person *p;
 		} post;
 	};
 } AuxData;
 
-#define READACTORFILETYPE(type) case type: \
+#define BEGINREADACTORFILE if(0) {
+
+#define READACTORFILETYPE(type) } else if (strcmp(a->filename, "type") == 0) { \
 	readstr(r, a->p->type); \
 	respond(r, nil); \
 	return;
+
+#define ENDREADACTORFILE } else { \
+	fprint(2, "Unhandled actor file type %s\n", a->filename); \
+	assert(0); \
+	}
 
 static void postrespfromcache(Req *r, char *abspath, char *fieldname) {
 	JSON *json, *field;
@@ -98,18 +99,33 @@ void fsread(Req *r){
 		return;
 	}
 	switch (a->filetype) {
-	READACTORFILETYPE(preferredUsername)
-	READACTORFILETYPE(name)
-	READACTORFILETYPE(id)
-	READACTORFILETYPE(inbox)
-	READACTORFILETYPE(outbox)
-	READACTORFILETYPE(following)
-	READACTORFILETYPE(followers)
+	case ActorFile: {
+		if (strcmp(a->filename, "ctl") == 0) {
+			// special file, not in the struct.
+			// reading from it currently does nothing
+			// because we can't write to it yet.
+			r->ofcall.data = 0;
+			r->ofcall.count = 0;
+			respond(r, nil);
+			return;
+		}
+
+		// files that just pass through to the person struct
+		BEGINREADACTORFILE
+		READACTORFILETYPE(preferredUsername)
+		READACTORFILETYPE(name)
+		READACTORFILETYPE(id)
+		READACTORFILETYPE(inbox)
+		READACTORFILETYPE(outbox)
+		READACTORFILETYPE(following)
+		READACTORFILETYPE(followers)
+		ENDREADACTORFILE
+	}
 	case PostFile: {
 		char path[1024];
 		// cachefile is relative to $home/lib/fedi9 so make it absolute
 		sprint(path, "%s/lib/fedi9/%s", getenv("home"), a->post.cachefile);
-		if (strcmp(a->post.filename, "raw") == 0) {
+		if (strcmp(a->filename, "raw") == 0) {
 			// pass through to cachefile using pread
 			int fd = open(path, OREAD);
 			r->ofcall.data = malloc(r->ifcall.count);
@@ -127,14 +143,14 @@ void fsread(Req *r){
 			}
 			respond(r, nil);
 			return;
-		} else if (strcmp(a->post.filename, "url") == 0){
+		} else if (strcmp(a->filename, "url") == 0){
 			postrespfromcache(r, path, "url");
 			return;
-		} else if (strcmp(a->post.filename, "content") == 0) {
+		} else if (strcmp(a->filename, "content") == 0) {
 			postrespfromcache(r, path, "content");
 			return;
 		} else {
-			fprint(2, "Unhandled post file type %s\n", a->post.filename);
+			fprint(2, "Unhandled post file type %s\n", a->filename);
 			assert(0);
 		}
 	}
@@ -144,8 +160,32 @@ void fsread(Req *r){
 	return;
 }
 
+void fswrite(Req *r){
+	AuxData *a = r->fid->file->aux;
+	if (a == nil) {
+		respond(r, "internal error");
+		return;
+	}
+	if (a->filetype != ActorFile) {
+		respond(r, "write prohibited");
+		return;
+	}
+	if (strcmp(a->filename, "ctl") != 0) {
+		respond(r, "write prohibited");
+		return;
+	}
+	if (strncmp(r->ifcall.data, "refresh", 7) == 0) {
+		// FIXME: Add to a queue that calls
+		// getoutbox
+		respond(r, "refresh not implemented");
+	} else {
+		respond(r, "bad ctl command");
+	}
+	return;
+}
 Srv fs = {
 	.read = fsread,
+	.write = fswrite,
 };
 
 void usage(void) {
@@ -267,7 +307,7 @@ static void createpostsdir(Ndb *db, File *dir, Person *p) {
 			AuxData *ax = malloc(sizeof(AuxData));
 			ax->filetype = PostFile;
 			ax->post.cachefile = cachefile;
-			ax->post.filename = "raw";
+			ax->filename = "raw";
 			ax->post.p = p;
 			
 			createfile(postdir, "raw", nil, 0444, ax);
@@ -285,7 +325,7 @@ static void createpostsdir(Ndb *db, File *dir, Person *p) {
 			AuxData *ax = malloc(sizeof(AuxData));
 			ax->filetype = PostFile;
 			ax->post.cachefile = cachefile;
-			ax->post.filename = "url";
+			ax->filename = "url";
 			ax->post.p = p;
 			
 			createfile(postdir, "url", nil, 0444, ax);
@@ -294,7 +334,7 @@ static void createpostsdir(Ndb *db, File *dir, Person *p) {
 			AuxData *ax = malloc(sizeof(AuxData));
 			ax->filetype = PostFile;
 			ax->post.cachefile = cachefile;
-			ax->post.filename = "content";
+			ax->filename = "content";
 			ax->post.p = p;
 			
 			createfile(postdir, "content", nil, 0444, ax);
@@ -303,7 +343,7 @@ static void createpostsdir(Ndb *db, File *dir, Person *p) {
 			AuxData *ax = malloc(sizeof(AuxData));
 			ax->filetype = PostFile;
 			ax->post.cachefile = cachefile;
-			ax->post.filename = "summary";
+			ax->filename = "summary";
 			ax->post.p = p;
 			
 			createfile(postdir, "summary", nil, 0444, ax);
@@ -312,11 +352,12 @@ static void createpostsdir(Ndb *db, File *dir, Person *p) {
 	}
 }
 
-#define MKFILETYPE(type) { \
+#define MKFILETYPE(type, perms) { \
 	AuxData *ax = malloc(sizeof(AuxData)); \
-	ax->filetype = type; \
+	ax->filetype = ActorFile; \
+	ax->filename = "type"; \
 	ax->p = p; \
-	createfile(f, "type", nil, 0444, ax); \
+	createfile(f, "type", nil, perms, ax); \
 	}
 
 void createpeopletree(Ndb *db, Ndb *objectdb, Tree *t) {
@@ -329,17 +370,16 @@ void createpeopletree(Ndb *db, Ndb *objectdb, Tree *t) {
 		
 		File *f = createfile(t->root, friendlyName(p), nil, DMDIR|0555, nil);
 		if (f != nil) {
-			MKFILETYPE(preferredUsername)
-			MKFILETYPE(name)
-			MKFILETYPE(id)
-			MKFILETYPE(outbox)
-			MKFILETYPE(inbox)
-			MKFILETYPE(following)
-			MKFILETYPE(followers)
-
+			MKFILETYPE(preferredUsername, 0444)
+			MKFILETYPE(name, 0444)
+			MKFILETYPE(id, 0444)
+			MKFILETYPE(outbox, 0444)
+			MKFILETYPE(inbox, 0444)
+			MKFILETYPE(following, 0444)
+			MKFILETYPE(followers, 0444)
+			MKFILETYPE(ctl, 0660)
 			File *pdir = createfile(f, "posts", nil, DMDIR|0555, nil);
 			createpostsdir(objectdb, pdir, p);
-			// FIXME: create files for each of their posts.
 			
 		}
 		cur = ndbsnext(&s, "type", "Person");
