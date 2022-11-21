@@ -31,18 +31,22 @@ typedef struct {
 	} filetype;
 	char *filename;
 	union {
-		Person *p;
+		struct {
+			Person *p;
+			Reqqueue *ctlqueue;		
+		} actor;
 		struct {
 			char *cachefile;
 			Person *p;
 		} post;
+
 	};
 } AuxData;
 
 #define BEGINREADACTORFILE if(0) {
 
 #define READACTORFILETYPE(type) } else if (strcmp(a->filename, "type") == 0) { \
-	readstr(r, a->p->type); \
+	readstr(r, a->actor.p->type); \
 	respond(r, nil); \
 	return;
 
@@ -160,6 +164,19 @@ void fsread(Req *r){
 	return;
 }
 
+void actorctlwrite(Req *r) {
+	AuxData *a = r->fid->file->aux;
+	if (a == nil) {
+		respond(r, "internal error");
+		return;
+	}
+	if (strncmp(r->ifcall.data, "refresh", 7) == 0) {
+
+		respond(r, "refresh not implemented");
+	} else {
+		respond(r, "bad ctl command");
+	}
+}
 void fswrite(Req *r){
 	AuxData *a = r->fid->file->aux;
 	if (a == nil) {
@@ -174,14 +191,12 @@ void fswrite(Req *r){
 		respond(r, "write prohibited");
 		return;
 	}
-	if (strncmp(r->ifcall.data, "refresh", 7) == 0) {
-		// FIXME: Add to a queue that calls
-		// getoutbox
-		respond(r, "refresh not implemented");
-	} else {
-		respond(r, "bad ctl command");
-	}
-	return;
+	if (a->actor.ctlqueue == nil){
+		a->actor.ctlqueue = reqqueuecreate();
+	}	
+
+	reqqueuepush(a->actor.ctlqueue, r, actorctlwrite);
+
 }
 Srv fs = {
 	.read = fsread,
@@ -356,7 +371,7 @@ static void createpostsdir(Ndb *db, File *dir, Person *p) {
 	AuxData *ax = malloc(sizeof(AuxData)); \
 	ax->filetype = ActorFile; \
 	ax->filename = "type"; \
-	ax->p = p; \
+	ax->actor.p = p; \
 	createfile(f, "type", nil, perms, ax); \
 	}
 
@@ -392,7 +407,7 @@ static char* getdefaultdb(char *type) {
 	sprint(path, "%s/lib/fedi9/%s.db", getenv("home"), type);
 	return strdup(path);
 }
-void main(int argc, char *argv[]) {
+void threadmain(int argc, char *argv[]) {
 	char *actordbfile = getdefaultdb("following");
 	char *objectdbfile = getdefaultdb("objects");
 	ARGBEGIN{
@@ -423,5 +438,5 @@ void main(int argc, char *argv[]) {
 	t = alloctree(nil, nil, DMDIR|0555, nil);
 	fs.tree = t;
 	createpeopletree(actordb, objectdb, t);
-	postmountsrv(&fs, nil, "/mnt/fedi9", MREPL | MCREATE);	
+	threadpostmountsrv(&fs, nil, "/mnt/fedi9", MREPL | MCREATE);	
 }
