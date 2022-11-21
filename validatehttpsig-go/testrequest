@@ -1,0 +1,11 @@
+POST /users/driusan/inbox HTTP/1.1
+User-Agent: http.rb/5.1.0 (Mastodon/4.0.2; +https://mas.to/)
+Host: driusan.net
+Date: Sun, 20 Nov 2022 01:56:47 GMT
+Accept-Encoding: gzip
+Digest: SHA-256=HeC9zbWy6ao07kxpt6JYS98lrzmqVn5+N0Vf467nQSE=
+Content-Type: application/activity+json
+Signature: keyId="https://mas.to/users/driusan#main-key",algorithm="rsa-sha256",headers="(request-target) host date digest content-type",signature="fLURls6EJjtv+A0Buby6iBiUpegsFF5Llts19AemGmCtBFn1rKWSdEeSE3oZrheH1rIuisvj6ACJP054+SVnMDbfIFjbFc9YbM6ZMybwrE+lohJCp8z3BTK6t5w2uNTcHkdzNg+FmzGcIl0VFxooXXC7Vpn5qshI4nXoTYX6n5Fc/fKhNqlRQmzrbJtwuEKOxxipfOqUCKjFuy6emaNrs1vHn5DSp7w1g29odk1ioqyP/p6Je5oahGZU6OZ1UrEbT+GC8yPHao32x1WNDTtUVFfr8wBtiaUSlk/wh5eE9yUKc2IK9NNnoPIiIDyO7SU66hWIy5DuZXB0ukIm2tykHA=="
+Connection: Keep-Alive
+Content-Length: 1833
+

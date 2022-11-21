@@ -9,13 +9,19 @@ TARG=\
 
 RC=\
 	personrecord\
-	get
+	get\
+	validateincoming
 
 OFILES=readfile.$O uuid.$O
 
 HFILES=readfile.h uuid.h
 
 </sys/src/cmd/mkmany
+
+validatehttpsig: validatehttpsig-go
+	cd validatehttpsig-go
+	go build -o ../validatehttpsig
+	cd ..
 
 # Override install target to install rc.
 install:V:
@@ -24,6 +30,7 @@ install:V:
 		mk $MKFLAGS $i.install
 	for (i in $RC)
 		mk $MKFLAGS $i.rcinstall
+	cp validatehttpsig $BIN
 
 %.rcinstall:V:
 	cp $stem $BIN/$stem
