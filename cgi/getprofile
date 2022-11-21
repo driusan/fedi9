@@ -1,0 +1,42 @@
+#!/bin/rc
+rfork
+
+if (~ $PATH_INFO /users/*){
+	user=`{echo $PATH_INFO | sed 's#/users/##'}
+}
+if not {
+	echo 'Status: 404 Not Found'
+	echo 'Content-Type: text/plain'
+	echo
+	echo 'Not found'
+	exit ''
+}
+contentType='application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
+ifs='
+'
+for (line in `{echo $reqlines}) {
+	if (~ $line Accept:*){
+		switch($line){
+			case *application/ld+json*activitystreams*
+				contentType='application/ld+json; profile="https://www.w3.org/ns/activitystreams"'
+			case *application/ld+json*
+				contentType='application/ld+json'
+			case *application/activity+json*
+				contentType='application/activity+json'
+		}
+		echo $line >/sys/log/testing
+	}
+}
+if (test -f /usr/$user/lib/fedi9/profile.json){
+	echo 'Status: 200 OK'
+	echo 'Content-Type: ' $"contentType
+	echo
+	cat /usr/$user/lib/fedi9/profile.json
+}
+if not {
+	echo 'Status: 404 Not Found'
+	echo 'Content-Type: ' $"contentType
+	echo
+	echo '{ "error" : "not found"}'
+}
+exit ''

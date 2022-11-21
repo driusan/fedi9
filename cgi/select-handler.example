@@ -1,0 +1,27 @@
+#!/bin/rc
+
+if (~ $SERVER_NAME *){
+	# $TLS should be set by /rc/service/bin/tcp443.
+	# $SERVER_PORT is unreliable for determining TLS.
+	if (~ $TLS true){
+		PATH_INFO=$location
+		FS_ROOT=/usr/driusan/lib/webrootssl
+		switch($PATH_INFO){
+		case /.well-known/webfinger
+			exec static-or-cgi /usr/driusan/fedi9/cgi/webfingerd
+		case /users/*/inbox
+			exec static-or-cgi /usr/driusan/fedi9/cgi/inbox
+		case /users/*
+			exec static-or-cgi /usr/driusan/fedi9/cgi/getprofile
+		case *
+			exec static-or-index
+		}
+	}
+	if not {
+		PATH_INFO=$location
+		FS_ROOT=/usr/driusan/lib/webroot
+		exec static-or-index		
+	}
+}
+if not 
+	error 503

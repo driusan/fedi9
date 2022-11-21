@@ -1,0 +1,63 @@
+#!/bin/rc
+
+
+# Parsed each query param into an env variable
+awk '{
+	split($0, params, "&");
+	for(i = 1; i <= length(params); i++){
+		eqi = index(params[i], "=")
+		key = substr(params[i], 0, eqi-1)
+		value = substr(params[i], eqi+1)
+		system("HTTP_QUERYPARAM_"key"="value)
+	}
+}' </env/QUERY_STRING
+
+# parse the resource query param. Format is acct:username@hostname
+resource=`{cat /env/HTTP_QUERYPARAM_resource}
+echo $resource |awk 'BEGIN{ FS="[:@]"}{
+	system("WEBFINGER_TYPE=" $1)
+	system("WEBFINGER_USERNAME=" $2)
+	system("WEBFINGER_HOSTNAME=" $3)
+}'
+
+# /env/NAME has a \0 at the end, this gets rid of it
+wf_type = `{cat /env/WEBFINGER_TYPE}
+wf_hostname = `{cat /env/WEBFINGER_HOSTNAME}
+wf_username = `{cat /env/WEBFINGER_USERNAME}
+
+if (~ $wf_type acct) {}
+if not {
+	echo 'Status: 404 Not Found'
+	echo 'Content-Type: application/json'
+	echo
+	echo '{"error": "only acct resources supported"}'
+	
+	exit
+}
+
+if (~ $wf_hostname $SERVER_NAME) {
+}
+if not {
+	echo 'Status: 404 Not Found'
+	echo 'Content-Type: application/json'
+	echo
+	echo '{"error": "not found"}'
+	exit
+}
+
+if (test -e /usr/$wf_username/lib/fedi9/webfinger.json) {
+	echo 'Status: 200 OK'
+	echo 'Content-Type: application/json'
+	echo
+	cat /usr/$wf_username/lib/fedi9/webfinger.json >[2=1]
+}
+if not {
+	# either username doesn't exist or they haven't
+	# run mkprofile
+	echo 'Status: 404 Not Found'
+	echo
+	echo '{"error": "not found"}'
+	exit
+}
+
+
