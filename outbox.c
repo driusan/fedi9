@@ -22,6 +22,9 @@ char* readbody(int conn) {
 	char bodypath[2048];
 	sprintf(bodypath, "/mnt/web/%d/body", conn);
 	int fd = open(bodypath, OREAD);
+	if (fd <= 0) {
+		fprint(2, "could not open body for %d\n", conn);
+	}
 	char *data = readfile(fd);
 	close(fd);
 	return data;
@@ -32,12 +35,9 @@ JSON* getjson(int conn, char *url) {
 	char webfspath[2048];
 	int fd;
 	sprintf(webfspath, "/mnt/web/%d/ctl", conn);
-//	print("getjson webfs: %s\n", webfspath);
 	fd = open(webfspath, OWRITE);
-//	print("Opening %s\n", webfspath);
 	fprint(fd, "url %s\n", url);
 	fprint(fd, "headers Accept: application/ld+json;profile=\"https://www.w3.org/ns/activitystreams\"\n");
-	
 	char *body = readbody(conn);
 	close(fd);
 	
@@ -123,7 +123,7 @@ int Nfmt(Fmt *f) {
 	int n;
 	NoteObject* nt = va_arg(f->args, NoteObject*);
 	n = fmtprint(f, "id=%s internaluuid=%U cachepath=%s\n", nt->id, *nt->internaluuid, nt->cachepath);
-	if (n <= 0) {
+	if (n < 0) {
 		return n;
 	}
 	if (nt->attributedTo != nil) {
@@ -163,7 +163,7 @@ outboxRetrievalStats cachecollectionpage(JSON *page) {
 		ofd = open(objdb, OWRITE);
 		seek(ofd,0,2);
 	} else {
-		fprint(2, "Create %s\n", objdb);
+	//	fprint(2, "Create %s\n", objdb);
 		ofd = create(objdb, OWRITE, 0644);
 	}
 	memset(&rv, 0, sizeof(rv));
@@ -216,7 +216,7 @@ outboxRetrievalStats cachecollectionpage(JSON *page) {
 	close(ofd);
 	return rv;
 }
-outboxRetrievalStats cachecollection(int conn, JSON *root) {
+static outboxRetrievalStats cachecollection(int conn, JSON *root) {
 	outboxRetrievalStats rv, pagestats;
 //	print("getcollectionpage %d %J\n", conn, root);
 	JSON *cur = jsonbyname(root, "first");

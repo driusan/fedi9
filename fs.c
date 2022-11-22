@@ -8,6 +8,8 @@
 #include <ndb.h>
 
 #include "readfile.h"
+#include "uuid.h"
+#include "outbox.h"
 
 typedef char* url_t;
 typedef struct Person {
@@ -24,6 +26,8 @@ typedef struct Person {
 
 } Person;
 
+static void createpostsdir(Ndb *db, File *dir, Person *p);
+
 typedef struct {
 	enum{
 		ActorFile,
@@ -33,7 +37,9 @@ typedef struct {
 	union {
 		struct {
 			Person *p;
-			Reqqueue *ctlqueue;		
+			Reqqueue *ctlqueue;
+			File *fstreeroot;
+			Ndb* objectsdb;		
 		} actor;
 		struct {
 			char *cachefile;
@@ -95,7 +101,7 @@ static void postrespfromcache(Req *r, char *abspath, char *fieldname) {
 	respond(r, nil);
 	return;
 }
-
+extern int debug;
 void fsread(Req *r){
 	AuxData *a = r->fid->file->aux;
 	if (a == nil) {
@@ -129,6 +135,7 @@ void fsread(Req *r){
 		char path[1024];
 		// cachefile is relative to $home/lib/fedi9 so make it absolute
 		sprint(path, "%s/lib/fedi9/%s", getenv("home"), a->post.cachefile);
+		fprint(2, "path: %s\n", path);
 		if (strcmp(a->filename, "raw") == 0) {
 			// pass through to cachefile using pread
 			int fd = open(path, OREAD);
@@ -153,6 +160,9 @@ void fsread(Req *r){
 		} else if (strcmp(a->filename, "content") == 0) {
 			postrespfromcache(r, path, "content");
 			return;
+		} else if (strcmp(a->filename, "summary") == 0) {
+			postrespfromcache(r, path, "content");
+			return;
 		} else {
 			fprint(2, "Unhandled post file type %s\n", a->filename);
 			assert(0);
@@ -164,15 +174,90 @@ void fsread(Req *r){
 	return;
 }
 
+void removedir(File *f, int removeFile) {
+	if (f == nil) {
+		return;
+	}
+	incref(f);
+	Readdir *dir = opendirfile(f);
+	assert(dir != nil);
+	uchar *dbuf = malloc(1024);
+	int n, off=0;
+	while((n = readdirfile(dir, dbuf, 1024, off)) > 0) {
+		fprint(2, "n is %d\n", n);
+		off+=n;
+		Dir d;
+		char *strs = malloc(1024);
+		int remn = n;
+		uchar *p = dbuf;
+		fprint(2, "Inner loop\n");
+		while (remn > 0) {
+			fprint(2, "convM2D\n");
+			int y = convM2D(p, n, &d, strs);
+			fprint(2, "convM2D length: %d, remn: %d\n", y, remn);
+			if (d.name != nil) {
+				fprint(2, "Remove %s\n", d.name);
+				File *child = walkfile(f, d.name);
+				incref(child);
+				fprint(2, "Checking if dir\n");
+				if ((d.mode & DMDIR) != 0) {
+					fprint(2, "Recursing into %s\n", d.name);
+					removedir(child, 1);
+				} else {
+					fprint(2, "Removing non-dir\n");
+					assert(removefile(child) == 0);
+				}
+			
+			}
+			p+= y;
+			remn -= y;
+		}
+		free(strs);
+	}
+	closedirfile(dir);
+	if (removeFile)	assert(removefile(f) == 0);
+	free(dbuf);
+
+}
+
 void actorctlwrite(Req *r) {
 	AuxData *a = r->fid->file->aux;
 	if (a == nil) {
 		respond(r, "internal error");
 		return;
 	}
+	incref(a->actor.fstreeroot);
 	if (strncmp(r->ifcall.data, "refresh", 7) == 0) {
+		// get the outbox
+		outboxRetrievalStats stats = getoutbox(a->actor.p->outbox);
+		if (stats.nposts > 0) {
+			// Remove the old posts tree
+			File *pdir = walkfile(a->actor.fstreeroot, "posts");
+	
+			if (pdir == nil) {
+				respond(r, "no posts");
+				return;
+			}
+			incref(pdir);
+			removedir(pdir, 0);
 
-		respond(r, "refresh not implemented");
+			// create a new posts tree
+			createpostsdir(a->actor.objectsdb, pdir, a->actor.p);
+			respond(r, nil);
+			return;
+		}
+		respond(r, nil);
+	} else if(strncmp(r->ifcall.data, "destroy", 7) == 0) {
+		File *pdir = walkfile(a->actor.fstreeroot, "posts");
+	
+		if (pdir == nil) {
+			respond(r, "no posts");
+			return;
+		}
+		incref(pdir);
+		fprint(2, "removedir posts\n");
+		removedir(pdir, 1);
+		respond(r, "done destroy");
 	} else {
 		respond(r, "bad ctl command");
 	}
@@ -194,7 +279,6 @@ void fswrite(Req *r){
 	if (a->actor.ctlqueue == nil){
 		a->actor.ctlqueue = reqqueuecreate();
 	}	
-
 	reqqueuepush(a->actor.ctlqueue, r, actorctlwrite);
 
 }
@@ -299,79 +383,103 @@ static JSON* getjsonfromcache(char *cachepath) {
 	return data;
 
 }
-static void createpostsdir(Ndb *db, File *dir, Person *p) {
-	Ndbs s;
-	assert(p != nil && dir != nil && db != nil);
 
-	Ndbtuple *cur = ndbsearch(db, &s, "attributedTo", p->id);
+static void createpostdir(File *parentdir, char* postname, Ndbtuple *cur, Person *p) {
+	AuxData *ax;
+	incref(parentdir);
+	File *postdir = createfile(parentdir, postname, nil, DMDIR|0555, nil);
+	if (postdir == nil) {
+		fprint(2, "Could not create %s\n", postname);
+		return;
+	}
+	char *cachefile = strdup(getfirstattr(cur, "cachepath"));
+	assert(cachefile != nil);
+
+	ax = malloc(sizeof(AuxData));
+	ax->filetype = PostFile;
+	ax->post.cachefile = cachefile;
+	ax->filename = "raw";
+	ax->post.p = p;
+	createfile(postdir, "raw", nil, 0444, ax);
+
+	JSON *jsondata = getjsonfromcache(cachefile);
+	if (jsondata == nil) {
+		fprint(2, "could not parse json for %s (%s)\n", cachefile, postname);
+		return;
+	}
+	if (jsonbyname(jsondata, "url") != nil) {
+		ax = malloc(sizeof(AuxData));
+		ax->filetype = PostFile;
+		ax->post.cachefile = cachefile;
+		ax->filename = "url";
+		ax->post.p = p;
+
+		createfile(postdir, "url", nil, 0444, ax);
+	}
 	
-	char *postname;
-	File *postdir;
-	while(cur != nil){
-		// only top level posts go in the posts directory
-		if (strcmp(getfirstattr(cur, "inReplyTo"), "null") != 0) {
-			cur = ndbsnext(&s, "attributedTo", p->id);
-			continue;
-		}
-		postname = getfirstattr(cur, "publishedTime");
-		assert(postname != nil);
-		postdir = createfile(dir, postname, nil, DMDIR|0555, nil);
+	if (jsonbyname(jsondata, "content") != nil) {
+		ax = malloc(sizeof(AuxData));
+		ax->filetype = PostFile;
+		ax->post.cachefile = cachefile;
+		ax->filename = "content";
+		ax->post.p = p;
 
-		char *cachefile = getfirstattr(cur, "cachepath");
-		{
-			AuxData *ax = malloc(sizeof(AuxData));
-			ax->filetype = PostFile;
-			ax->post.cachefile = cachefile;
-			ax->filename = "raw";
-			ax->post.p = p;
-			
-			createfile(postdir, "raw", nil, 0444, ax);
-		}
+		createfile(postdir, "content", nil, 0444, ax);
+	}
+	if (jsonbyname(jsondata, "summary") != nil) {
+		ax = malloc(sizeof(AuxData));
+		ax->filetype = PostFile;
+		ax->post.cachefile = cachefile;
+		ax->filename = "summary";
+		ax->post.p = p;
 
-		
-		JSON *jsondata = getjsonfromcache(cachefile);
-		if (jsondata == nil) {
-			fprint(2, "could not parse json for %s (%s)\n", cachefile, postname);
-			cur = ndbsnext(&s, "attributedTo", p->id);
-			continue;
-		}
-	
-		if (jsonbyname(jsondata, "url") != nil) {
-			AuxData *ax = malloc(sizeof(AuxData));
-			ax->filetype = PostFile;
-			ax->post.cachefile = cachefile;
-			ax->filename = "url";
-			ax->post.p = p;
-			
-			createfile(postdir, "url", nil, 0444, ax);
-		}
-		if (jsonbyname(jsondata, "content") != nil) {
-			AuxData *ax = malloc(sizeof(AuxData));
-			ax->filetype = PostFile;
-			ax->post.cachefile = cachefile;
-			ax->filename = "content";
-			ax->post.p = p;
-			
-			createfile(postdir, "content", nil, 0444, ax);
-		}
-		if (jsonbyname(jsondata, "summary") != nil) {
-			AuxData *ax = malloc(sizeof(AuxData));
-			ax->filetype = PostFile;
-			ax->post.cachefile = cachefile;
-			ax->filename = "summary";
-			ax->post.p = p;
-			
-			createfile(postdir, "summary", nil, 0444, ax);
-		}
-		cur = ndbsnext(&s, "attributedTo", p->id);
+		createfile(postdir, "summary", nil, 0444, ax);
 	}
 }
 
-#define MKFILETYPE(type, perms) { \
+static void createpostsdir(Ndb *db, File *dir, Person *p) {
+	Ndbs s;
+	incref(dir);
+	assert(p != nil && dir != nil && db != nil);
+
+	// fprint(2, "Create posts dir for %s\n", p->id);
+	if (ndbchanged(db)) {
+		ndbreopen(db);
+	}
+	Ndbtuple *cur = ndbsearch(db, &s, "attributedTo", p->id);
+	
+	char *postname;
+	char datestr[11];
+	File *dateDir = nil;
+	for(;cur != nil;ndbfree(cur), cur = ndbsnext(&s, "attributedTo", p->id)){
+		// only top level posts go in the posts directory
+		if (strcmp(getfirstattr(cur, "inReplyTo"), "null") != 0) {
+			continue;
+		}
+		postname = getfirstattr(cur, "publishedTime");
+
+		assert(postname != nil);
+		
+		if (strncmp(datestr, postname, 10) != 0) {
+			memset(datestr, 0, 11);
+			strncpy(datestr, postname, 10);
+			dateDir = createfile(dir, datestr, nil, DMDIR|0555, nil);
+		}
+		assert(dateDir != nil);
+		
+		createpostdir(dateDir, postname, cur, p);
+	}
+}
+
+#define MKFILETYPE(type, perms, filetree, _objectsdb) { \
 	AuxData *ax = malloc(sizeof(AuxData)); \
 	ax->filetype = ActorFile; \
 	ax->filename = "type"; \
 	ax->actor.p = p; \
+	ax->actor.fstreeroot = filetree; \
+	incref(filetree); \
+	ax->actor.ctlqueue = nil; \
+	ax->actor.objectsdb = _objectsdb; \
 	createfile(f, "type", nil, perms, ax); \
 	}
 
@@ -385,18 +493,19 @@ void createpeopletree(Ndb *db, Ndb *objectdb, Tree *t) {
 		
 		File *f = createfile(t->root, friendlyName(p), nil, DMDIR|0555, nil);
 		if (f != nil) {
-			MKFILETYPE(preferredUsername, 0444)
-			MKFILETYPE(name, 0444)
-			MKFILETYPE(id, 0444)
-			MKFILETYPE(outbox, 0444)
-			MKFILETYPE(inbox, 0444)
-			MKFILETYPE(following, 0444)
-			MKFILETYPE(followers, 0444)
-			MKFILETYPE(ctl, 0660)
+			MKFILETYPE(preferredUsername, 0444, f, objectdb)
+			MKFILETYPE(name, 0444, f, objectdb)
+			MKFILETYPE(id, 0444, f, objectdb)
+			MKFILETYPE(outbox, 0444, f, objectdb)
+			MKFILETYPE(inbox, 0444, f, objectdb)
+			MKFILETYPE(following, 0444, f, objectdb)
+			MKFILETYPE(followers, 0444, f, objectdb)
+			MKFILETYPE(ctl, 0660, f, objectdb)
 			File *pdir = createfile(f, "posts", nil, DMDIR|0555, nil);
 			createpostsdir(objectdb, pdir, p);
 			
 		}
+		ndbfree(cur);
 		cur = ndbsnext(&s, "type", "Person");
 	}
 	assert(cur==nil);
@@ -407,6 +516,12 @@ static char* getdefaultdb(char *type) {
 	sprint(path, "%s/lib/fedi9/%s.db", getenv("home"), type);
 	return strdup(path);
 }
+void destroyfile(File *f) {
+	AuxData *a = f->aux;
+	free(a);
+	fprint(2, "In destroy %s\n", f->Dir.name);
+}
+extern int chatty9p;
 void threadmain(int argc, char *argv[]) {
 	char *actordbfile = getdefaultdb("following");
 	char *objectdbfile = getdefaultdb("objects");
@@ -424,6 +539,9 @@ void threadmain(int argc, char *argv[]) {
 	if (actordbfile == nil) {
 		usage();
 	}
+	fmtinstall('U', Ufmt);
+	fmtinstall('N', Nfmt);
+	JSONfmtinstall();
 	Ndb *actordb = ndbopen(actordbfile);
 	if (actordb == nil) {
 		fprint(2, "Could not open %s", actordbfile);
@@ -435,7 +553,7 @@ void threadmain(int argc, char *argv[]) {
 		exits("no object db");
 	}
 	Tree *t;
-	t = alloctree(nil, nil, DMDIR|0555, nil);
+	t = alloctree(nil, nil, DMDIR|0555, destroyfile);
 	fs.tree = t;
 	createpeopletree(actordb, objectdb, t);
 	threadpostmountsrv(&fs, nil, "/mnt/fedi9", MREPL | MCREATE);	
