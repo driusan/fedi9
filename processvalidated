@@ -1,0 +1,134 @@
+#!/bin/rc
+rfork
+
+cd $home/lib/fedi9/inbox/validated
+objectsdb=$home/lib/fedi9/objects.db
+actordb=$home/lib/fedi9/following.db
+followreqdb=$home/lib/fedi9/followreq.db
+undodb=$home/lib/fedi9/undo.db
+fn mvToProcessed {
+	base=`{basename $* .body}
+	mkdir -p ../processed
+	mv $base.^(headers body) ../processed/
+}
+# Use ls instead of the *.body pattern so that
+# the empty case gets handled correctly
+files=`{ls *.body >[2]/dev/null}
+
+for (file in $files){
+	fedi9/spamcheck $"file
+	actor=`{cat $file | fedi9/extractkey actor}
+	actorobj=`{ndb/query -f $home/lib/fedi9/following.db id $"actor}
+	activityType=`{cat $file | fedi9/extractkey type}
+	if (~ $"actorobj '') {
+		# New actor $actor
+		fedi9/get $"actor | fedi9/personrecord >> $actordb
+	}
+
+	activityType=`{cat $file | fedi9/extractkey type}
+
+	switch ($activityType){
+	case 'Create'
+		echo 'Create'
+		obj=`{cat $file | fedi9/extractkey object}
+		objid=`{echo $"obj | fedi9/extractkey id}
+		if (~ `{ndb/query -f $objectsdb id $"objid} ''){
+			objtype=`{echo $"obj | fedi9/extractkey type}
+			switch($"objtype){
+			case Note
+				cachepath='objects/'`{echo $objid | sha1sum -2 256}^'.json'
+				attributedTo=`{echo $obj | fedi9/extractkey attributedTo}
+				objUrl=`{echo $obj | fedi9/extractkey url}
+				inReplyTo=`{echo $obj|fedi9/extractkey inReplyTo}
+				publishedTime=`{echo $obj|fedi9/extractkey published}
+				# FIXME: Implement this if it's not null. need jsonfs
+				# to handle arrays?
+				if (~ $"inReplyTo 'null') {}
+				if not {
+					exit 'unhandled inReplyTo'
+				}
+				echo $"obj > $home'/lib/fedi9/'^$cachepath
+				dbfile=$objectsdb
+				echo 'id='$"objid 'cachepath='$"cachepath >>$dbfile
+				echo '	attributedTo='$"attributedTo >> $dbfile
+				echo '	inReplyTo=null' >>$dbfile
+				echo '	url='$objUrl>> $dbfile
+				echo '	publishedTime='$"publishedTime >>$dbfile
+				echo >> $dbfile
+				mvToProcessed $file
+			}
+		}
+		if not {
+			echo Duplicate Create for $"objid
+			mvToProcessed $file
+		} 
+		case 'Delete'
+			echo 'Delete'
+			cachepath=`{ndb/query -f $objectsdb id $"objid cachepath}
+			if (~ $cachepath '') {
+				echo 'Delete unknown object'
+				mvToProcessed $file
+			}
+			if not {
+				objtype=`{echo $"obj | fedi9/extractkey type}
+				if(~ $"objtype 'Tombstone'){
+					echo $"obj >$cachepath
+					mvToProcessed $file
+				}
+				if not {
+					echo '{}' >$cachepath
+					mvToProcessed $file
+				}
+	
+			}
+		case 'Follow'
+			reqid=`{cat $file | fedi9/extractkey id}
+			cachedreq=`{ndb/query -f $followreqdb id $"reqid id}
+			if (~ $"cachedreq '') {
+				obj=`{cat $file | fedi9/extractkey object}
+				echo 'id='$"reqid ' actor='$"actor 'object='$"obj >> $"followreqdb
+				mvToProcessed $file
+			}
+			if not {
+				echo 'Already processed follow req' >[2=1]
+				mvToProcessed $file
+			}
+		case 'Undo'
+			obj=`{cat $file | fedi9/extractkey object}
+		
+			undotype=`{echo $"obj | fedi9/extractkey type}
+			switch($"undotype){
+			case 'Follow'
+				# subobj=`{echo $"obj | fedi9/extractkey object}
+				reqid=`{echo $"obj | fedi9/extractkey id}
+				if (test -e $undodb) {
+					cachedreq=`{ndb/query -f $undodb id $"reqid id}
+				}
+				if not {
+					cachedreq=''
+				}
+				if (~ $"cachedreq '') {
+					reqid=`{echo $"obj | fedi9/extractkey id}
+					actor=`{echo $"obj | fedi9/extractkey actor}
+					objectid=`{echo $"obj | fedi9/extractkey actor}
+					echo 'id='$reqid ' actor='$"actor' object='$"objectid' type='$"undotype >> $undodb
+					mvToProcessed $file
+				}
+				if not {
+					echo 'Already processed Undo' >[2=1]
+					mvToProcessed $file
+				}
+			case *
+				echo 'Unhandled Undo of type ' $undotype
+			}
+			undoobj=`{echo $"obj | fedi9/extractkey id}
+			if (test -e $undodb) {
+				cachedreq=`{ndb/query -f $undodb id $"reqid id}
+			}
+			if not {
+				cachedreq=''
+			}
+		case *
+			echo Unhandled activity type $activityType
+	}
+}

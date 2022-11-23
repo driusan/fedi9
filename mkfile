@@ -11,7 +11,8 @@ RC=\
 	personrecord\
 	get\
 	validateincoming\
-	spamcheck
+	spamcheck\
+	processvalidated
 
 OFILES=readfile.$O uuid.$O outbox.$O
 
