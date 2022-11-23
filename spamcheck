@@ -1,0 +1,18 @@
+#!/bin/rc
+rfork
+
+type=`{cat $1 | fedi9/extractkey type}
+actor=`{cat $1 | fedi9/extractkey actor}
+msgto=`{cat $1 | fedi9/extractkey to}
+
+if (~ $"type 'Delete') {
+	if (~ $"msgto 'https://www.w3.org/ns/activitystreams#Public') {
+		actorObj=`{ndb/query -f $home/lib/fedi9/following.db id $"actor}
+		if (~ $"actorObj '') {
+			exit 'spam'
+		}
+		if not {
+		}
+	}
+}
+exit ''

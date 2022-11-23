@@ -10,7 +10,8 @@ TARG=\
 RC=\
 	personrecord\
 	get\
-	validateincoming
+	validateincoming\
+	spamcheck
 
 OFILES=readfile.$O uuid.$O outbox.$O
 

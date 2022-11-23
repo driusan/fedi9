@@ -4,21 +4,33 @@ rfork
 
 if (~ $"PATH_INFO /users/*) {
 	username=`{echo $"PATH_INFO |  sed 's#^/users/([^/]+)/.*$#\1#'}
-
 }
+
 if (~ $REQUEST_METHOD POST){
 	# Use the time with nanosecond precision in a way that collates increasingly. 
 	filename=/usr/$username/lib/fedi9/inbox/`{date -f 'YYYY-MM-DD-hh:mm:ss.nnnnn'}
+	
 	mkdir -p /usr/$username/lib/fedi9/inbox/
 
 	echo $"REQUEST_METHOD $"REQUEST_URI$"QUERYSTRING HTTP/1.1 >$"filename.headers
 	echo $"reqlines >> $"filename.headers
 	cat >$filename.body
-	echo 'Status: 202 Accepted'
-	echo 'Content-Type: application/json'
-	echo
-	echo '{ "okay" : "got it" }'
-	exit ''
+	fedi9/spamcheck $"filename.body
+	if(~ $status '') {
+		echo 'Status: 202 Accepted'
+		echo 'Content-Type: application/json'
+		echo
+		echo '{ "okay" : "got it" }'
+		exit ''
+	}
+	if not {
+		rm -f $"filename.^(headers body)
+		echo 'Status: 400 Bad Request'
+		echo 'Content-Type: application/json'
+		echo
+		echo '{ "error" : "could not verify http signature" }'
+		exit ''
+	}
 }
 
 echo 'Status: 401 Unauthorized'
