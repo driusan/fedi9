@@ -1,0 +1,81 @@
+#!/bin/rc
+rfork
+
+if (~ $"hostname '') {
+	echo hostname not set >[1=2]
+	exit 'hostname'
+}
+if (test -e /usr/$user/lib/fedi9/profile.json) {
+	echo 'profile already exists' >[1=2]
+	exit 'profile'
+}
+if (test -e /usr/$user/lib/fedi9/webfinger.json){
+	echo 'webfinger.json already exists' >[1=2]
+	exit 'webfinger'
+}
+if (~ $user '') {
+	echo user not set >[1=2]
+	exit 'nouser'
+}
+
+tmpfile=/tmp/profilekey.$pid
+
+fn sigexit sigint sigquit sighup{
+	rm -f $tmpfile
+	exit
+}
+
+mkdir -p /usr/$user/lib/fedi9/
+auth/rsagen -t 'service=activitypub' > $tmpfile
+# FIXME: Verify if this is the right encoding to use. Or maybe
+# just use jwk
+asn1=`{auth/rsa2pub <$tmpfile| auth/rsa2asn1 | auth/pemencode 'RSA PUBLIC KEY' | sed -e 's/^/\\n/g'}
+asn1=`{auth/rsa2asn1 < $tmpfile | auth/pemencode 'RSA PUBLIC KEY' | sed 's/$/\\n/g' | tr -d '
+'}
+
+userbase='https://'$"hostname'/users/'$"user
+
+cat > /usr/$user/lib/fedi9/profile.json <<EOP
+{
+	"@context": [
+		"https://www.w3.org/ns/activitystreams",
+		"https://www.w3id.org/security/v1"
+	],
+	"id": "$userbase",
+	"type": "Person",
+	"preferredUsername": "$user",
+	"inbox": "$userbase/inbox",
+	"outbox": "$userbase/outbox",
+	"publicKey": {
+		"id" :"https://$hostname/users/$user#main-key",
+		"owner": "https://$hostname/users/$user",
+		"publicKeyPem": "$asn1"
+	}
+}
+EOP
+cat $tmpfile
+cat >/usr/$user/lib/fedi9/webfinger.json <<EOW
+{
+	"subject": "acct:$user@$hostname",
+	"aliases": [
+		"$userbase"
+	],
+	"links": [
+		{
+			"rel": "self",
+			"type": "application/activity+json",
+			"href": "https://$hostname/users/$user"
+		}
+	]
+}
+EOW
+rm $tmpfile
+
+mkdir -p $home/lib/fedi9/
+actordb=$home/lib/fedi9/actors.db
+echo 'id='$userbase' type=Person' >> $actordb
+echo '	inbox='$"userbase'/inbox outbox='$"userbase'/outbox' >> $actordb
+echo '	following='$"userbase'/following outbox='$"userbase'/followers' >> $actordb
+echo '	preferredUsername='$user >> $actordb
+echo '	self=true' >> $actordb
+exit ''
