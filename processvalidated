@@ -3,7 +3,8 @@ rfork
 
 cd $home/lib/fedi9/inbox/validated
 objectsdb=$home/lib/fedi9/objects.db
-actordb=$home/lib/fedi9/following.db
+actordb=$home/lib/fedi9/actors.db
+followingdb=$home/lib/fedi9/following.db
 followreqdb=$home/lib/fedi9/followreq.db
 undodb=$home/lib/fedi9/undo.db
 fn mvToProcessed {
@@ -18,10 +19,10 @@ files=`{ls *.body >[2]/dev/null}
 for (file in $files){
 	fedi9/spamcheck $"file
 	actor=`{cat $file | fedi9/extractkey actor}
-	actorobj=`{ndb/query -f $home/lib/fedi9/following.db id $"actor}
+	actorobj=`{ndb/query -f $"actordb id $"actor}
 	activityType=`{cat $file | fedi9/extractkey type}
 	if (~ $"actorobj '') {
-		# New actor $actor
+		echo New actor $actor in $"actordb
 		fedi9/get $"actor | fedi9/personrecord >> $actordb
 	}
 
@@ -128,7 +129,45 @@ for (file in $files){
 			if not {
 				cachedreq=''
 			}
+		case Accept
+			obj=`{cat $file | fedi9/extractkey object}
+		
+			accepttype=`{echo $"obj | fedi9/extractkey type}
+			switch($"accepttype){
+				case Follow
+					ndbid=`{ndb/query -f $"actordb id $"actor id}
+					if (~ $"ndbid '') {
+						# We did a fedi9/get for the actor object at the
+						# start of this script, this shouldn't happen
+						echo Could not find $"actor in $"actordb >[1=2]
+						exit 'no actor'
+					}
+
+					if (test -e $followingdb) {
+						dupcheck=`{ndb/query -f $followingdb id $"actor id}
+						if (~ $dupcheck '') {
+							doInsert=true
+						}
+						if not {
+							# Already in following database
+							doInsert=false
+						}
+
+					}
+					if not {
+						# DB didn't exist to query, needs to be created
+						doInsert=true
+					}
+
+					if (~ $doInsert true) {
+						echo id'='$ndbid >> $followingdb
+					}
+
+					mvToProcessed $file
+				case *
+					echo Unhandled accept type $accepttype >[1=2]
+			}
 		case *
-			echo Unhandled activity type $activityType
+			echo Unhandled activity type $activityType >[1=2]
 	}
 }
