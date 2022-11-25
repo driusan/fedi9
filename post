@@ -18,9 +18,14 @@ if (~ $"fedidomain '') {
 	echo '$fedidomain not set' >[1=2]
 	exit 'no domain'
 }
+fn sigexit sigint sigquit sighup{
+}
 tmpfile=/tmp/post.$pid
 cat > $tmpfile.body
 
+fn sigexit sigint sigquit sighup{
+	rm -f $tmpfile $tmpfile.body
+}
 #FIXME: Strip host from inbox
 conn=`{cat /mnt/web/clone}
 cd /mnt/web/$"conn
