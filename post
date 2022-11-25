@@ -1,0 +1,55 @@
+#!/bin/rc
+rfork
+
+actorsdb=$home/lib/fedi9/actors.db
+
+inbox=`{ndb/query -f $actorsdb id $1 inbox}
+keyid=`{ndb/query -f $actorsdb self true keyid}
+
+if (~ $"keyid '') {
+	echo Could not determine key id to use >[1=2]
+	exit 'no keyid'
+}
+if (~ $"inbox '') {
+	echo Could not find inbox for $1 >[1=2]
+	exit 'no inbox'
+}
+if (~ $"fedidomain '') {
+	echo '$fedidomain not set' >[1=2]
+	exit 'no domain'
+}
+tmpfile=/tmp/post.$pid
+cat > $tmpfile.body
+
+#FIXME: Strip host from inbox
+conn=`{cat /mnt/web/clone}
+cd /mnt/web/$"conn
+echo url $"inbox > /mnt/web/$"conn/ctl
+inboxpath=`{cat /mnt/web/$"conn/parsed/path}
+hostdst=`{cat /mnt/web/$"conn/parsed/host}
+now=`{date -u -f 'WW, DD MMM YYYY hh:mm:ss ZZZ'}
+cat >$tmpfile <<EOF
+POST $inboxpath HTTP/1.1
+Date: $now
+Content-Type: application/ld+json; profile="https://www.w3.org/ns/activitystreams"
+Host: $hostdst
+
+EOF
+# httpsign with our private key
+cat $tmpfile
+
+ifs='
+'
+headers=`{fedi9/httpsign -w -p $home/lib/fedi9/privateKey.pem -b $tmpfile.body $keyid < $tmpfile}
+fedi9/httpsign -w -p $home/lib/fedi9/privateKey.pem -b $tmpfile.body $keyid < $tmpfile
+
+# echo url https://driusan.net/.well-known/test > /mnt/web/$"conn/ctl
+for (header in $headers) {
+	echo $"header > /mnt/web/$"conn/ctl
+}
+cat $tmpfile.body > /mnt/web/$"conn/postbody
+# FIXME: How do we read the body of a post request with webfs?
+cat /mnt/web/$"conn/body
+
+
+# read body?

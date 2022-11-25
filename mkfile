@@ -13,7 +13,9 @@ RC=\
 	validateincoming\
 	spamcheck\
 	processvalidated\
-	mkprofile
+	mkprofile\
+	mkactivity\
+	post
 
 OFILES=readfile.$O uuid.$O outbox.$O
 

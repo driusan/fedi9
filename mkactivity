@@ -1,0 +1,69 @@
+#!/bin/rc
+
+actorsdb=$home/lib/fedi9/actors.db
+
+fn getactorurl {
+	id=`{ndb/query -f $actorsdb id $1 id}
+	if (~ $"id '') {
+		# Didn't find it in our database
+		got=`{fedi9/get $1 >[2]/dev/null}
+		if(~ $"got '') {
+			exit 'no profile'
+	
+		}
+		echo $got | personrecord >> $actorsdb
+		ndb/query -f $actorsdb id $1 id
+		exit ''
+	}
+	if not {
+		# Found it in our database
+		echo $"id
+		exit ''
+	}
+}
+
+if (~ $"fedidomain '') {
+	echo 'Can not determine domain name' >[1=2]
+	exit 'no domain'
+}
+type=$1
+
+switch($type){
+	case 'Accept'
+		body=`{cat}
+		cat <<EOF
+{
+	"id" : ...,
+	"type" : "Accept",
+	"object" : $body
+}
+EOF
+
+		exit ''
+	case 'Follow'
+		me=`{ndb/query -f $actorsdb self true id}
+		them=`{getactorurl $2}
+		if (~ $"them '') {
+			echo 'Could not get' $2 >[1=2]
+			exit 'bad object'
+		}
+		if (~ $"me '') {
+			echo 'Could not determine actor' >[1=2]
+			exit 'no self actors'
+		}
+		id='https'://$"fedidomain'/users/'$user'/followrequest/'`{fedi9/newuuid}
+		cat <<EOF
+{
+	"@context" : "https://www.w3.org/ns/activitystreams",
+	"id" : "$id",
+	"type" : "Follow",
+	"actor" : "$me",
+	"object" : "$them"
+}
+EOF
+
+		exit ''	
+	case *
+		echo 'Unhandled Activity type ' $1
+		exit 'unknown activity'
+}
