@@ -41,26 +41,21 @@ for (file in $files){
 				cachepath='objects/'`{echo $objid | sha1sum -2 256}^'.json'
 				attributedTo=`{echo $obj | fedi9/extractkey attributedTo}
 				objUrl=`{echo $obj | fedi9/extractkey url}
-				inReplyTo=`{echo $obj|fedi9/extractkey inReplyTo}
+				inReplyTo=`{echo $obj | jsontype='string' fedi9/extractkey inReplyTo}
 				publishedTime=`{echo $obj|fedi9/extractkey published}
-				# FIXME: Implement this if it's not null. need jsonfs
-				# to handle arrays?
-				if (~ $"inReplyTo 'null') {
-					echo $"obj > $home'/lib/fedi9/'^$cachepath
-					dbfile=$objectsdb
-					echo 'id='$"objid 'cachepath='$"cachepath >>$dbfile
-					echo '	attributedTo='$"attributedTo >> $dbfile
-					echo '	inReplyTo=null' >>$dbfile
-					echo '	url='$objUrl>> $dbfile
-					echo '	publishedTime='$"publishedTime >>$dbfile
-					echo >> $dbfile
-					mvToProcessed $file
+				if (~ $"inReplyTo '') {
+					echo 'Could not handle inReplyTo' >[1=2]
+					exit 'unhandled inReplyTo'
 				}
-				if not {
-					echo Unhandled inReplyTo $"inReplyTo >[1=2]
-					# exit 'unhandled inReplyTo'
-				}
-
+				echo $"obj > $home'/lib/fedi9/'^$cachepath
+				dbfile=$objectsdb
+				echo 'id='$"objid 'cachepath='$"cachepath >>$dbfile
+				echo '	attributedTo='$"attributedTo >> $dbfile
+				echo '	inReplyTo='$"inReplyTo >>$dbfile
+				echo '	url='$objUrl>> $dbfile
+				echo '	publishedTime='$"publishedTime >>$dbfile
+				echo >> $dbfile
+				mvToProcessed $file
 			case *
 				echo Unhandled object type $"objtype >[1=2]
 			}
