@@ -19,7 +19,7 @@ void main(int argc, char *argv[]) {
 		exits("no field");
 	}
 	char *type = getenv("jsontype");
-	if (strcmp(type, "string") == 0) {
+	if (type != nil && strcmp(type, "string") == 0) {
 		if (field->t != JSONString) {
 			exits("unmatched type");
 		}
