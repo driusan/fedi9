@@ -5,7 +5,8 @@ TARG=\
 	extractkey\
 	newuuid\
 	getoutbox\
-	fs
+	fs\
+	jsonfmt
 
 RC=\
 	personrecord\
