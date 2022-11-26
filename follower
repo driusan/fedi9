@@ -1,0 +1,103 @@
+#!/bin/rc
+
+followersdb=$home/lib/fedi9/followers.db
+followreqdb=$home/lib/fedi9/followreq.db
+actorsdb=$home/lib/fedi9/actors.db
+undodb=$home/lib/fedi9/undo.db
+
+fn urlToMention {
+	exit 'not implemented'
+}
+
+
+me=`{ndb/query -f $actorsdb self true id}
+if (~ $"me '') {
+	echo 'Could not determine identity'
+}
+
+displayMode=raw
+while (~ $1 -*) {
+	switch ($1){
+	case -m
+		shift
+		displayMode=$1
+		shift
+	}
+}
+subcommand=$1
+shift
+
+switch($subcommand) {
+case list
+	ndb/query -f $followersdb -a accepted true id
+case requests
+	requests=`{ndb/query -f $followreqdb -a object $me id}
+	for (request in $requests) {
+		requestor=`{ndb/query -f $followreqdb id $request actor}
+		# echo Requestor $requestor
+		# Don't list accepted or cancelled requests
+		undone=`{ndb/query -f $undodb id $request id}
+		accepted=`{ndb/query -f $followersdb id $requestor}
+		skip=false
+		if (! ~ $"undone ''){
+			# echo 'Undone'
+			skip=true
+		}
+		if(! ~ $"accepted '') {
+			# echo 'Accepted'
+			skip=true
+		}
+		if (~ $skip false) {
+			switch($displayMode) {
+			case raw
+				echo $request
+			case user
+				echo $requestor
+			case mention
+				echo 'Mention mode not implemented' >[1=2]
+				exit 'not implemented'
+				echo `{urlToMention $requestor}
+			case *
+				echo 'Invalid display mode' >[1=2]
+				exit 'bad mode'
+			}	
+		}
+	}
+case accept
+	switch ($displayMode){
+	case raw
+		requestId=$1
+		shift
+		if (~ $"requestId '') {
+			echo usage: $0 accept requestId >[1=2]
+			exit 'usage'
+		}
+		request=`{ndb/query -f $followreqdb id $requestId id}
+
+		requestor=`{ndb/query -f $followreqdb id $requestId actor}
+		echo Requestor $requestor
+		if (~ $"request '') {
+			echo 'Could not find $requestId' >[1=2]
+			exit 'bad request id'
+		}
+		undone=`{ndb/query -f $undodb id $request id}
+		if (! ~ $undone '') {
+			echo $requestId has been cancelled >[1=2]
+			exit 'already undone'
+		}
+		echo Requestor $requestor
+		accepted=`{ndb/query -f $followersdb id $requestor}
+		if (! ~ $accepted '') {
+			echo $requestor is already a follower
+			# exit 'already follower'
+		}
+		fedi9/mkactivity Accept Follow $request | fedi9/post $requestor
+		echo id'='$requestor accepted'='true acceptedFrom'='$requestId > $followersdb
+	case *
+		echo 'Only raw accept implemented' >[1=2]
+		exit 'bad mode'
+	}
+case *
+	echo Unknown verb $subcommand >[1=2]
+	exit 'bad command'
+}

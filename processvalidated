@@ -15,9 +15,10 @@ fn mvToProcessed {
 # Use ls instead of the *.body pattern so that
 # the empty case gets handled correctly
 files=`{ls *.body >[2]/dev/null}
-
 for (file in $files){
+	echo File $file
 	fedi9/spamcheck $"file
+
 	actor=`{cat $file | fedi9/extractkey actor}
 	actorobj=`{ndb/query -f $"actordb id $"actor}
 	activityType=`{cat $file | fedi9/extractkey type}
@@ -44,130 +45,136 @@ for (file in $files){
 				publishedTime=`{echo $obj|fedi9/extractkey published}
 				# FIXME: Implement this if it's not null. need jsonfs
 				# to handle arrays?
-				if (~ $"inReplyTo 'null') {}
-				if not {
-					exit 'unhandled inReplyTo'
+				if (~ $"inReplyTo 'null') {
+					echo $"obj > $home'/lib/fedi9/'^$cachepath
+					dbfile=$objectsdb
+					echo 'id='$"objid 'cachepath='$"cachepath >>$dbfile
+					echo '	attributedTo='$"attributedTo >> $dbfile
+					echo '	inReplyTo=null' >>$dbfile
+					echo '	url='$objUrl>> $dbfile
+					echo '	publishedTime='$"publishedTime >>$dbfile
+					echo >> $dbfile
+					mvToProcessed $file
 				}
-				echo $"obj > $home'/lib/fedi9/'^$cachepath
-				dbfile=$objectsdb
-				echo 'id='$"objid 'cachepath='$"cachepath >>$dbfile
-				echo '	attributedTo='$"attributedTo >> $dbfile
-				echo '	inReplyTo=null' >>$dbfile
-				echo '	url='$objUrl>> $dbfile
-				echo '	publishedTime='$"publishedTime >>$dbfile
-				echo >> $dbfile
-				mvToProcessed $file
+				if not {
+					echo Unhandled inReplyTo $"inReplyTo >[1=2]
+					# exit 'unhandled inReplyTo'
+				}
+
+			case *
+				echo Unhandled object type $"objtype >[1=2]
 			}
 		}
 		if not {
 			echo Duplicate Create for $"objid
 			mvToProcessed $file
 		} 
-		case 'Delete'
-			echo 'Delete'
-			cachepath=`{ndb/query -f $objectsdb id $"objid cachepath}
-			if (~ $cachepath '') {
-				echo 'Delete unknown object'
+	case 'Delete'
+		echo 'Delete'
+		cachepath=`{ndb/query -f $objectsdb id $"objid cachepath}
+		if (~ $cachepath '') {
+			echo 'Delete unknown object'
+			mvToProcessed $file
+		}
+		if not {
+			objtype=`{echo $"obj | fedi9/extractkey type}
+			if(~ $"objtype 'Tombstone'){
+				echo $"obj >$cachepath
 				mvToProcessed $file
 			}
 			if not {
-				objtype=`{echo $"obj | fedi9/extractkey type}
-				if(~ $"objtype 'Tombstone'){
-					echo $"obj >$cachepath
-					mvToProcessed $file
-				}
-				if not {
-					echo '{}' >$cachepath
-					mvToProcessed $file
-				}
-	
-			}
-		case 'Follow'
-			reqid=`{cat $file | fedi9/extractkey id}
-			cachedreq=`{ndb/query -f $followreqdb id $"reqid id}
-			if (~ $"cachedreq '') {
-				obj=`{cat $file | fedi9/extractkey object}
-				echo 'id='$"reqid ' actor='$"actor 'object='$"obj >> $"followreqdb
+				echo '{}' >$cachepath
 				mvToProcessed $file
 			}
-			if not {
-				echo 'Already processed follow req' >[2=1]
-				mvToProcessed $file
-			}
-		case 'Undo'
+		}
+	case 'Follow'
+		echo 'Follow'
+		reqid=`{cat $file | fedi9/extractkey id}
+		cachedreq=`{ndb/query -f $followreqdb id $"reqid id}
+		if (~ $"cachedreq '') {
 			obj=`{cat $file | fedi9/extractkey object}
+			echo 'id='$"reqid ' actor='$"actor 'object='$"obj >> $"followreqdb
+			mvToProcessed $file
+		}
+		if not {
+			echo 'Already processed follow req' >[2=1]
+			mvToProcessed $file
+		}
+	case 'Undo'
+		echo 'Undo'
+		obj=`{cat $file | fedi9/extractkey object}
 		
-			undotype=`{echo $"obj | fedi9/extractkey type}
-			switch($"undotype){
-			case 'Follow'
-				# subobj=`{echo $"obj | fedi9/extractkey object}
-				reqid=`{echo $"obj | fedi9/extractkey id}
-				if (test -e $undodb) {
-					cachedreq=`{ndb/query -f $undodb id $"reqid id}
-				}
-				if not {
-					cachedreq=''
-				}
-				if (~ $"cachedreq '') {
-					reqid=`{echo $"obj | fedi9/extractkey id}
-					actor=`{echo $"obj | fedi9/extractkey actor}
-					objectid=`{echo $"obj | fedi9/extractkey actor}
-					echo 'id='$reqid ' actor='$"actor' object='$"objectid' type='$"undotype >> $undodb
-					mvToProcessed $file
-				}
-				if not {
-					echo 'Already processed Undo' >[2=1]
-					mvToProcessed $file
-				}
-			case *
-				echo 'Unhandled Undo of type ' $undotype
-			}
-			undoobj=`{echo $"obj | fedi9/extractkey id}
+		undotype=`{echo $"obj | fedi9/extractkey type}
+		switch($"undotype){
+		case 'Follow'
+			# subobj=`{echo $"obj | fedi9/extractkey object}
+			reqid=`{echo $"obj | fedi9/extractkey id}
 			if (test -e $undodb) {
 				cachedreq=`{ndb/query -f $undodb id $"reqid id}
 			}
 			if not {
 				cachedreq=''
 			}
-		case Accept
-			obj=`{cat $file | fedi9/extractkey object}
-		
-			accepttype=`{echo $"obj | fedi9/extractkey type}
-			switch($"accepttype){
-				case Follow
-					ndbid=`{ndb/query -f $"actordb id $"actor id}
-					if (~ $"ndbid '') {
-						# We did a fedi9/get for the actor object at the
-						# start of this script, this shouldn't happen
-						echo Could not find $"actor in $"actordb >[1=2]
-						exit 'no actor'
-					}
-
-					if (test -e $followingdb) {
-						dupcheck=`{ndb/query -f $followingdb id $"actor id}
-						if (~ $dupcheck '') {
-							doInsert=true
-						}
-						if not {
-							# Already in following database
-							doInsert=false
-						}
-
-					}
-					if not {
-						# DB didn't exist to query, needs to be created
-						doInsert=true
-					}
-
-					if (~ $doInsert true) {
-						echo id'='$ndbid >> $followingdb
-					}
-
-					mvToProcessed $file
-				case *
-					echo Unhandled accept type $accepttype >[1=2]
+			if (~ $"cachedreq '') {
+				reqid=`{echo $"obj | fedi9/extractkey id}
+				actor=`{echo $"obj | fedi9/extractkey actor}
+				objectid=`{echo $"obj | fedi9/extractkey actor}
+				echo 'id='$reqid ' actor='$"actor' object='$"objectid' type='$"undotype >> $undodb
+				mvToProcessed $file
+			}
+			if not {
+				echo 'Already processed Undo' >[2=1]
+				mvToProcessed $file
 			}
 		case *
-			echo Unhandled activity type $activityType >[1=2]
+			echo 'Unhandled Undo of type ' $undotype
+		}
+		undoobj=`{echo $"obj | fedi9/extractkey id}
+		if (test -e $undodb) {
+			cachedreq=`{ndb/query -f $undodb id $"reqid id}
+		}
+		if not {
+			cachedreq=''
+		}
+	case Accept
+		echo 'Accept'
+		obj=`{cat $file | fedi9/extractkey object}
+		
+		accepttype=`{echo $"obj | fedi9/extractkey type}
+		switch($"accepttype){
+		case Follow
+			ndbid=`{ndb/query -f $"actordb id $"actor id}
+			if (~ $"ndbid '') {
+				# We did a fedi9/get for the actor object at the
+				# start of this script, this shouldn't happen
+				echo Could not find $"actor in $"actordb >[1=2]
+				exit 'no actor'
+			}
+
+			if (test -e $followingdb) {
+				dupcheck=`{ndb/query -f $followingdb id $"actor id}
+				if (~ $dupcheck '') {
+					doInsert=true
+				}
+				if not {
+					# Already in following database
+					doInsert=false
+				}
+
+			}
+			if not {
+				# DB didn't exist to query, needs to be created
+				doInsert=true
+			}
+
+			if (~ $doInsert true) {
+				echo id'='$ndbid >> $followingdb
+			}
+			mvToProcessed $file
+		case *
+			echo Unhandled Accept type $accepttype >[1=2]
+		}
+	case *
+		echo Unhandled activity type $activityType >[1=2]
 	}
 }

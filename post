@@ -46,7 +46,6 @@ cat $tmpfile
 ifs='
 '
 headers=`{fedi9/httpsign -w -p $home/lib/fedi9/privateKey.pem -b $tmpfile.body $keyid < $tmpfile}
-fedi9/httpsign -w -p $home/lib/fedi9/privateKey.pem -b $tmpfile.body $keyid < $tmpfile
 
 # echo url https://driusan.net/.well-known/test > /mnt/web/$"conn/ctl
 for (header in $headers) {

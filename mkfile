@@ -15,7 +15,8 @@ RC=\
 	processvalidated\
 	mkprofile\
 	mkactivity\
-	post
+	post\
+	follower
 
 OFILES=readfile.$O uuid.$O outbox.$O
 
