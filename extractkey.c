@@ -19,11 +19,18 @@ void main(int argc, char *argv[]) {
 		exits("no field");
 	}
 	char *type = getenv("jsontype");
-	if (type != nil && strcmp(type, "string") == 0) {
-		if (field->t != JSONString) {
-			exits("unmatched type");
+	if (type != nil) {
+		if(strcmp(type, "string") == 0) {
+			if (field->t != JSONString) {
+				exits("unmatched type");
+			}
+		} else if (strcmp(type, "string|null") == 0) {
+			if (field->t != JSONString && field->t != JSONNull) {
+				exits("unmatched type");
+			}
 		}
 	}
+
 	JSONfmtinstall();
 	if (field->t == JSONString) {
 		// don't use %J to avoid quotation marks
