@@ -165,7 +165,7 @@ SECTION
 	echo '}' >> /tmp/activity.$pid
 	fedi9/jsonfmt < /tmp/activity.$pid
 	rm -f /tmp/activity.$pid
-	exit 'unhandled create'
+	exit ''
 	case *
 		echo 'Unhandled Activity type ' $1
 		exit 'unknown activity'

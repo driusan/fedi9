@@ -2,9 +2,16 @@
 #include <libc.h>
 #include "uuid.h"
 
-void main(int, char *[]) {
+void main(int argc, char *argv[]) {
 	uuid_t* u = newuuid();
+	int newline = 1;
+	if (argc > 1 && strcmp(argv[1], "-n") == 0) {
+		newline = 0;
+	}
 	fmtinstall('U', Ufmt);
-	print("%U\n", *u);
+	if (newline)
+		print("%U\n", *u);
+	else
+		print("%U", *u);
 	exits("");
 }

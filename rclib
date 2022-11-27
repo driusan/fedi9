@@ -2,6 +2,7 @@
 
 actorsdb=$home/lib/fedi9/actors.db
 followreqdb=$home/lib/fedi9/followreq.db
+followersdb=$home/lib/fedi9/followers.db
 
 me=`{ndb/query -f $actorsdb self true id}
 

@@ -29,6 +29,9 @@ case Note
 		case -summary
 			shift
 			passthroughobj=($passthroughobj -summary $1)
+		case -n
+			shift
+			noPerform=true
 		case *
 			echo Unhandled argument type $1 >[1=2]
 			exit 'bad arg'
@@ -91,17 +94,37 @@ case Note
 	mkdir -p $home/lib/fedi9/notes
 	mkobject $type -id https://$fedidomain/users/$user/notes/$uuid $passthroughobj > $home/lib/fedi9/notes/$uuid 
 	if (~ $"status '') {
-		echo Object: https://$fedidomain/users/$user/notes/$uuid Location:$home/lib/fedi9/notes/$uuid
+		# echo Object: https://$fedidomain/users/$user/notes/$uuid Location:$home/lib/fedi9/notes/$uuid
 	}
 	if not {
 		echo Could not create object $"status
 	}
 	mkdir -p $home/lib/fedi9/activities
 	mkactivity Create -id https://$fedidomain/users/$user/activites/$uuid Note $passthroughact -objectfile $home/lib/fedi9/notes/$uuid > $home/lib/fedi9/activities/$uuid
-case *
 	if (~ $"status ''){
-		echo Activity: https://$fedidomain/users/$user/activites/$uuid Location:$home/lib/fedi9/activities/$uuid
+		# echo Activity: https://$fedidomain/users/$user/activites/$uuid Location:$home/lib/fedi9/activities/$uuid
 	}
+	for (addressee in $to $cc) {
+		switch($addressee){
+		case $publicID
+			# we don't post it anywhere but output a message for diagnostics
+			echo Published publicly >[1=2]
+		case $myfollowersID
+			# dereference and post to each of them
+			# individually
+			followers=`{ndb/query -f $followersdb accepted true id}
+			for (followerid in $followers){
+				echo fedi9/post $followerid '<'$home/lib/fedi9/activities/$uuid
+			}
+		case *
+			echo fedi9/post $addressee '<'$home/lib/fedi9/activities/$uuid
+		}
+	}
+	if (~ $noPerform true) {
+		echo Deleting published files >[1=2]
+		rm -f $home/lib/fedi9/activities/$uuid  $home/lib/fedi9/notes/$uuid 
+	}
+	exit ''
 case *
 	echo Unhandled publish type >[1=2]
 	exit 'bad type'
