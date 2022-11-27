@@ -1,0 +1,46 @@
+#!/bin/rc
+
+actorsdb=$home/lib/fedi9/actors.db
+followreqdb=$home/lib/fedi9/followreq.db
+
+me=`{ndb/query -f $actorsdb self true id}
+
+if (~ $"fedidomain '') {
+	echo fedidomain not set >[1=2]
+	exit 'no domain'
+}
+
+# Helpers shared between mkactivity and mkobject
+fn quoteRequiredValue {
+	switch($1){
+	case null
+		echo null
+	case ''
+		echo null
+	case *
+		echo '"'$1'"'
+	}
+}
+
+fn optionalValue {
+	key=$1
+	value=$2
+	switch ($"value){
+	case null
+	case ''
+	case *
+		echo
+		echo '"'$"key'" : "'$"value'"',
+	}
+}
+fn requiredArray {
+	echo -n '['
+	while (! ~ $#* 0) {
+		echo -n '"'$1'"'
+		shift
+		if (! ~ $#* 0) {
+			echo -n ,
+		}
+	}
+	echo ']'
+}

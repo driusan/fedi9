@@ -1,0 +1,119 @@
+#!/bin/rc
+
+rfork
+. /bin/fedi9/rclib
+
+
+fn usage {
+	echo usage: $0 ObjectType >[1=2]
+}
+
+while(~ $1 -*){ 
+	switch($1){
+	case -id
+		shift
+		id=$1
+	}
+	shift
+}
+
+type=$1
+shift
+switch($type){
+case Note
+	to=()
+	cc=()
+	while(~ $1 -*){ 
+		switch($1){
+		case -id
+			shift
+			id=$1
+		case -summary
+			shift
+			summary=$1
+		case -inReplyTo
+			shift
+			if (~ $"inReplyTo ''){
+				inReplyTo=$1
+			}
+			if not {
+				echo inReplyTo can not be specified multiple times >[1=2]
+				exit 'too many inReplyTo'
+			}
+		case -published
+			shift
+			published=$1
+		case -url
+			shift
+			url=$1
+		case -to
+			shift
+			to=($to $1)
+		case -cc
+			shift
+			cc=($cc $1)
+		case -mediaType
+			shift
+			mediaType=$1
+		}
+		shift
+	}
+
+	if (~ $"id '') {
+		id='https://'$"fedidomain'/users/'$"user'/posts/'^`{date -f 'YYYY-MM-DD'}^'/'^`"{fedi9/newuuid -n}
+	}
+	if (~ $"published '') {
+		published=`{date -u -f 'YYYY-MM-DDThh:mm:ss[Z]'}
+	}
+	if (~ $"mediaType '') {
+		# The default media type if not specified in a JSON object in ActivityStreams
+		# is text/html, but we prefer a plainish text format so claim its markdown if
+		# it wasn't specified
+		mediaType='text/markdown'
+	}
+	summary=`{quoteRequiredValue $summary}
+	inReplyTo=`{quoteRequiredValue $inReplyTo}
+	url=`{optionalValue url $url}
+	me=`{ndb/query -f $actorsdb self true id}
+	if (~ $"me '') {
+		echo Could not determine Note author for attributedTo >[1=2]
+		exit 'no self actor'
+	}
+	if (~ $"to '') {
+		# Note actually true, but we'll pretend it is because it's probably
+		# user error if it's not at least to followers or 1 person
+		echo Note must be to at least one person >[1=2]
+		exit 'no to'
+	}
+	to=`{requiredArray $to}
+	cc=`{requiredArray $cc}
+	# FIXME: Replace newlines with \n
+	content=`{cat | sed -e 's/$/\\n/g' | tr -d '
+'}
+	# FIXME: handle attachment, tag, contentMap, and replies attributes..
+	# they're not required by ActivityStreams, but they're a good idea to have.
+	cat <<EOJSON
+{
+	"@context" : "https://www.w3.org/ns/activitystreams",
+	"id":"$id",
+	"type":"Note",
+	"summary": $summary,
+	"inReplyTo":$inReplyTo,
+	"published":"$published",$url
+	"attributedTo":"$me",
+	"to": $to,
+	"cc": $cc,
+	"mediaType" : "$mediaType",
+	"content":"$content",
+	"attachment":[],
+	"tag":[]
+}
+EOJSON
+case ''
+	usage
+	exit 'no type'
+case *
+	echo Unhandled object type $type >[1=2]
+	exit 'bad type'
+}
+

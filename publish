@@ -1,0 +1,108 @@
+#!/bin/rc
+
+rfork
+
+. /bin/fedi9/rclib
+
+activity=$1
+shift
+type=$1
+shift
+
+switch($type) {
+case Note
+	to=()
+	cc=()
+	passthroughobj=()
+	while(~ $1 -*){
+		switch($1){
+		case -to
+			shift
+			to=($to $1)
+			passthroughobj=($passthroughobj -to $1)
+			passthroughact=($passthroughact -to $1)
+		case -cc
+			shift
+			cc=($cc $1)
+			passthroughobj=($passthroughobj -cc $1)
+			passthroughact=($passthroughact -to $1)
+		case -summary
+			shift
+			passthroughobj=($passthroughobj -summary $1)
+		case *
+			echo Unhandled argument type $1 >[1=2]
+			exit 'bad arg'
+		}
+		shift
+
+	}
+
+	publicID='https://www.w3.org/ns/activitystreams#Public'
+	myfollowersID=`{ndb/query -f $actorsdb self true followers}
+	# Default to public and CC followers if -to and -cc wasn't specified
+	if (~ $"to '') {
+		to=($publicID)
+		passthroughobj=($passthroughobj -to $to)
+		passthroughact=($passthroughact -to $to)
+		if (~ $"cc '') {
+			cc=($myfollowersID)
+			passthroughobj=($passthroughobj -cc $cc)
+			passthroughact=($passthroughact -cc $cc)
+		}
+		if not {
+			echo cc specified without to >[1=2]
+			exit 'bad addressees'
+		}
+	}
+
+	# Validate to and cc. For now we only support public, own followers,
+	# and known users, but we'll probably need to expand this to support
+	# other people's followers and new actors in the future in order to
+	# handle replies
+	for(addressee in $to) {
+		switch($addressee){
+		case $publicID
+		case $myfollowersID
+		case *
+			actorobj=`{ndb/query -f $actorsdb id $addressee}
+			if (~ $"actorobj '') {
+				echo Unknown to $addressee >[1=2]
+				exit 'unknown actor'
+			}
+			echo To: $addressee
+		}
+
+	}
+	for(addressee in $cc) {
+		switch($addressee){
+		case $publicID
+		case $myfollowersID
+		case *
+			actorobj=`{ndb/query -f $actorsdb id $addressee}
+			if (~ $"actorobj '') {
+				echo Unknown cc $addressee >[1=2]
+				exit 'unknown actor'
+			}
+			echo To: $addressee
+		}
+
+	}
+	uuid=`{fedi9/newuuid -n}
+	mkdir -p $home/lib/fedi9/notes
+	mkobject $type -id https://$fedidomain/users/$user/notes/$uuid $passthroughobj > $home/lib/fedi9/notes/$uuid 
+	if (~ $"status '') {
+		echo Object: https://$fedidomain/users/$user/notes/$uuid Location:$home/lib/fedi9/notes/$uuid
+	}
+	if not {
+		echo Could not create object $"status
+	}
+	mkdir -p $home/lib/fedi9/activities
+	mkactivity Create -id https://$fedidomain/users/$user/activites/$uuid Note $passthroughact -objectfile $home/lib/fedi9/notes/$uuid > $home/lib/fedi9/activities/$uuid
+case *
+	if (~ $"status ''){
+		echo Activity: https://$fedidomain/users/$user/activites/$uuid Location:$home/lib/fedi9/activities/$uuid
+	}
+case *
+	echo Unhandled publish type >[1=2]
+	exit 'bad type'
+}

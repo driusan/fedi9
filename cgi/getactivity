@@ -1,0 +1,77 @@
+#!/bin/rc
+rfork
+
+
+if (~ $PATH_INFO /users/*/activities/*){
+	username=`{echo $"PATH_INFO | sed 's#^/users/([^/]+)/activities/.*$#\1#'}
+	activityid=`{echo $"PATH_INFO | sed 's#^/users/([^/]+)/activities/(.*)$#\2#'}
+}
+if not {
+	# We shouldn't have been routed here by select-handler
+	echo 'Content-Type: application/json'
+	echo 'Status: 500'
+	echo
+	echo '{ "error: : "Internal server error" }'
+	exit ''
+}
+
+# Determine which content-type they want us to send
+contentType='application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
+ifs='
+'
+for (line in `{echo $reqlines}) {
+	if (~ $line Accept:*){
+		switch($line){
+			case *application/ld+json*activitystreams*
+				contentType='application/ld+json; profile="https://www.w3.org/ns/activitystreams"'
+			case *application/ld+json*
+				contentType='application/ld+json'
+			case *application/activity+json*
+				contentType='application/activity+json'
+		}
+	}
+}
+
+# Check if the activity exists. If it's addressed to the Public, return it
+# otherwise return a 401.
+if (test -e /usr/$username/lib/fedi9/activities/$activityid) {
+	to=`{fedi9/extractkey to </usr/$username/lib/fedi9/activities/$activityid}
+	for(addressee in $to){
+		echo To: $"addressee
+		if (~ $"addressee 'https://www.w3.org/ns/activitystreams#Public') {
+			echo Content-Type: $contentType
+			echo 'Status: 200'
+			echo
+			cat /usr/$username/lib/fedi9/activities/$activityid
+			exit ''
+		}
+	}
+
+	cc=`{fedi9/extractkey cc </usr/$username/lib/fedi9/activities/$activityid}
+	for(addressee in $cc){
+		echo To: $"addressee
+		if (~ $"addressee 'https://www.w3.org/ns/activitystreams#Public') {
+			echo Content-Type: $contentType
+			echo 'Status: 200'
+			echo
+			cat /usr/$username/lib/fedi9/activities/$activityid
+			exit ''
+		}
+	}
+
+	echo Content-Type: application/json
+	echo 'Status: 401'
+	echo
+	echo '{ "error" : "Permission denied" }'
+	exit ''
+}
+if not {
+	# The activity did not exist
+	echo Content-Type: application/json
+	echo 'Status: 404'
+	echo
+	echo '{ "error" : "Not Found" }'
+	exit ''
+}
+
+exit ''

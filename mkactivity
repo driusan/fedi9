@@ -1,7 +1,7 @@
 #!/bin/rc
+rfork
 
-actorsdb=$home/lib/fedi9/actors.db
-followreqdb=$home/lib/fedi9/followreq.db
+. /bin/fedi9/rclib
 
 fn getactorurl {
 	id=`{ndb/query -f $actorsdb id $1 id}
@@ -23,39 +23,36 @@ fn getactorurl {
 	}
 }
 
-if (~ $"fedidomain '') {
-	echo 'Can not determine domain name' >[1=2]
-	exit 'no domain'
-}
 type=$1
+shift
 
 switch($type){
-	case 'Accept'
-		switch($2) {
-			case Follow
-				if (~ $"3 '') {
-					echo usage: $0 Accept Follow RequestID >[1=2]
-					exit 'no requestid'
-				}
-				acceptId=`{ndb/query -f $followreqdb id $3 id}
-				if (~ $acceptId '') {
-					echo could not find $3
-					exit 'bad request id'
-				}
-	
-				undoId=`{ndb/query -f $undodb id $3}
-				if (! ~ $undoId '') {
-					echo can not accept cancelled request >[1=2]
-					exit 'cancelled request'
-				}
-				followActorId=`{ndb/query -f $followreqdb id $3 actor}
-				followObjectId=`{ndb/query -f $followreqdb id $3 object}
-				me=`{ndb/query -f $actorsdb self true id}
-				newActivityId='https'://$"fedidomain'/users/'$user'#/followaccept/'`{fedi9/newuuid}
-				# It's not clear if this is right if they included other fields in the Follow
-				# request. We need to include the request in the object, but we don't have
-				# it anymore, so we try our best to re-construct it.
-				cat <<EOF
+case 'Accept'
+	switch($2) {
+	case Follow
+		if (~ $"3 '') {
+			echo usage: $0 Accept Follow RequestID >[1=2]
+			exit 'no requestid'
+		}
+		acceptId=`{ndb/query -f $followreqdb id $3 id}
+		if (~ $acceptId '') {
+			echo could not find $3
+			exit 'bad request id'
+		}
+
+		undoId=`{ndb/query -f $undodb id $3}
+		if (! ~ $undoId '') {
+			echo can not accept cancelled request >[1=2]
+			exit 'cancelled request'
+		}
+		followActorId=`{ndb/query -f $followreqdb id $3 actor}
+		followObjectId=`{ndb/query -f $followreqdb id $3 object}
+		me=`{ndb/query -f $actorsdb self true id}
+		newActivityId='https'://$"fedidomain'/users/'$user'#/followaccept/'`{fedi9/newuuid -n}
+		# It's not clear if this is right if they included other fields in the Follow
+		# request. We need to include the request in the object, but we don't have
+		# it anymore, so we try our best to re-construct it.
+		cat <<EOF
 {
 	"@context" : "https://www.w3.org/ns/activitystreams",
 	"id" : "$newActivityId",
@@ -66,29 +63,27 @@ switch($type){
 		"type" : "Follow",
 		"actor" : "$followActorId",
 		"object" : "$followObjectId"
-		
 	}
 }
 EOF
-			case *
-				echo 'Only know how to accept follows' >[1=2]
-				exit 'bad accept type'
-
-		}
-		exit ''
-	case 'Follow'
-		me=`{ndb/query -f $actorsdb self true id}
-		them=`{getactorurl $2}
-		if (~ $"them '') {
-			echo 'Could not get' $2 >[1=2]
-			exit 'bad object'
-		}
-		if (~ $"me '') {
-			echo 'Could not determine actor' >[1=2]
-			exit 'no self actors'
-		}
-		id='https'://$"fedidomain'/users/'$user'/followrequest/'`{fedi9/newuuid}
-		cat <<EOF
+	case *
+		echo 'Only know how to accept follows' >[1=2]
+		exit 'bad accept type'
+	}
+	exit ''
+case 'Follow'
+	me=`{ndb/query -f $actorsdb self true id}
+	them=`{getactorurl $2}
+	if (~ $"them '') {
+		echo 'Could not get' $2 >[1=2]
+		exit 'bad object'
+	}
+	if (~ $"me '') {
+		echo 'Could not determine actor' >[1=2]
+		exit 'no self actors'
+	}
+	id='https'://$"fedidomain'/users/'$user'/followrequest/'`{fedi9/newuuid}
+	cat <<EOF
 {
 	"@context" : "https://www.w3.org/ns/activitystreams",
 	"id" : "$id",
@@ -97,9 +92,82 @@ EOF
 	"object" : "$them"
 }
 EOF
+	exit ''	
+case 'Create'
+	while (~ $1 -*) {
+		switch($1){
+		case -id
+			shift
+			newActivityId=$1
+		}
+		shift
+	}
+	if (~ $"newActivityId '') {
+		newActivityId='https'://$"fedidomain'/users/'$user'/activities/'`{fedi9/newuuid -n}
+	}
+	subtype=$1
+	shift
 
-		exit ''		
+	ifs='
+'
+	to=()
+	cc=()
+	passthrough=()
+	while (~ $1 -*) {
+		switch($1) {
+		case -to
+			shift
+			passthrough=($passthrough -to $1)
+			to=($to $1)
+		case -cc
+			shift
+			passthrough=($passthrough -cc $1)
+			cc=($cc $1)
+		case -summary
+			shift
+			passthrough=($passthrough -summary $1)
+		case -objectfile
+			shift
+			objectfile=$1
+		case *
+			echo Unhandled argument $1 >[1=2]
+			exit 'bad argument'
+		}
+		shift
+	}
+	if (~ $"me '') {
+		echo 'Could not determine actor' >[1=2]
+		exit 'no self actors'
+	}
+	now=`{date -u -f 'YYYY-MM-DDThh:mm:ss[Z]'}
+
+	if (~ $objectfile '') {
+		fedi9/mkobject Note $passthrough -published $now > /tmp/object.$pid
+		objectfile=/tmp/object.$pid
+	}
+
+	to=`{requiredArray $to}
+	cc=`{requiredArray $cc}
+	cat > /tmp/activity.$pid <<SECTION
+{
+	"@context": "https://www.w3.org/ns/activitystreams",
+	"id" : "$newActivityId",
+	"type" : "Create",
+	"actor": "$me",
+	"to" : $to,
+	"cc" : $cc,
+	"published" : "$now",
+	"object" : {
+SECTION
+	# Get rid of the @context line
+	tail +3 $objectfile >> /tmp/activity.$pid
+	rm -f /tmp/object.$pid
+	echo '}' >> /tmp/activity.$pid
+	fedi9/jsonfmt < /tmp/activity.$pid
+	rm -f /tmp/activity.$pid
+	exit 'unhandled create'
 	case *
 		echo 'Unhandled Activity type ' $1
 		exit 'unknown activity'
 }
+
