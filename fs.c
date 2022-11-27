@@ -523,7 +523,7 @@ void destroyfile(File *f) {
 }
 extern int chatty9p;
 void threadmain(int argc, char *argv[]) {
-	char *actordbfile = getdefaultdb("following");
+	char *actordbfile = getdefaultdb("actors");
 	char *objectdbfile = getdefaultdb("objects");
 	ARGBEGIN{
 	case 'f':
