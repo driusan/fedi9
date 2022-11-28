@@ -28,6 +28,7 @@ typedef struct Person {
 
 static void createpostsdir(Ndb *db, File *dir, Person *p);
 
+
 typedef struct {
 	enum{
 		ActorFile,
@@ -44,11 +45,50 @@ typedef struct {
 		struct {
 			char *cachefile;
 			Person *p;
+			int ncontentfmt;
+			char *contentfmt;
 		} post;
 
 	};
 } AuxData;
 
+static void htmlfmt(AuxData *dst, char *val) {
+	// Waitmsg *w;
+	int c2p[2];
+	int p2c[2];
+	if (pipe(c2p) < 0) {
+		exits("pipe failed");
+	}
+	if (pipe(p2c) < 0) {
+		exits("pipe failed");
+	}
+	switch(fork()){
+	case -1: exits("fork failed");
+	case 0:
+		dup(p2c[0], 0);
+		dup(c2p[0], 1);
+
+		close(p2c[0]);
+		close(p2c[1]);
+		close(c2p[0]);
+		close(c2p[1]);
+
+		execl("/bin/htmlfmt", "htmlfmt", nil);
+	default:
+	 	fprint(p2c[1], "%s", val);
+		close(p2c[0]);
+		close(p2c[1]);
+		close(c2p[0]);		
+		dst->post.contentfmt = readfile(c2p[1]);
+
+		close(c2p[1]);
+	// 	close(fd[0]);
+		
+		// close(fd[0]);
+		wait();
+	}
+	//dst->post.contentfmt = "Test";
+}
 #define BEGINREADACTORFILE if(0) {
 
 #define READACTORFILETYPE(type) } else if (strcmp(a->filename, "type") == 0) { \
@@ -61,6 +101,39 @@ typedef struct {
 	assert(0); \
 	}
 
+static void htmlfmtcontentresp(Req *r, char *abspath, AuxData *dst){
+	if (dst->post.contentfmt == nil) {
+		JSON *json, *field;
+		char *s;
+
+		// Parse the json and then free the intermediary stuff
+		int fd = open(abspath, OREAD);
+		s = readfile(fd);
+		close(fd);
+		json = jsonparse(s);
+		free(s);
+		if (json == nil) {
+			respond(r, "no json");
+			return;
+		}
+		field = jsonbyname(json, "content");
+		if (field == nil) {
+			free(json);
+			respond(r, "json missing content");
+			return;
+		}
+		if(field->t != JSONString){
+			free(json);
+			respond(r, "content not string");
+		}
+		htmlfmt(dst, field->s);
+	}
+	// htmlfmt should have populated it above, otherwise it should already
+	// be cached.
+	assert(dst->post.contentfmt != nil);
+	readstr(r, dst->post.contentfmt);
+	respond(r, nil);
+}
 static void postrespfromcache(Req *r, char *abspath, char *fieldname) {
 	JSON *json, *field;
 	char *s;
@@ -154,14 +227,23 @@ void fsread(Req *r){
 			}
 			respond(r, nil);
 			return;
+		} else if (strcmp(a->filename, "id") == 0){
+			postrespfromcache(r, path, "id");
+			return;
 		} else if (strcmp(a->filename, "url") == 0){
 			postrespfromcache(r, path, "url");
 			return;
-		} else if (strcmp(a->filename, "content") == 0) {
+		} else if (strcmp(a->filename, "content.raw") == 0) {
 			postrespfromcache(r, path, "content");
 			return;
+		} else if (strcmp(a->filename, "content") == 0) {
+			htmlfmtcontentresp(r, path, a);
+			return;
+		} else if (strcmp(a->filename, "inReplyTo") == 0) {
+			postrespfromcache(r, path, "inReplyTo");
+			return;
 		} else if (strcmp(a->filename, "summary") == 0) {
-			postrespfromcache(r, path, "content");
+			postrespfromcache(r, path, "summary");
 			return;
 		} else {
 			fprint(2, "Unhandled post file type %s\n", a->filename);
@@ -407,6 +489,15 @@ static void createpostdir(File *parentdir, char* postname, Ndbtuple *cur, Person
 		fprint(2, "could not parse json for %s (%s)\n", cachefile, postname);
 		return;
 	}
+	if (jsonbyname(jsondata, "id") != nil) {
+		ax = malloc(sizeof(AuxData));
+		ax->filetype = PostFile;
+		ax->post.cachefile = cachefile;
+		ax->filename = "id";
+		ax->post.p = p;
+
+		createfile(postdir, "id", nil, 0444, ax);
+	}
 	if (jsonbyname(jsondata, "url") != nil) {
 		ax = malloc(sizeof(AuxData));
 		ax->filetype = PostFile;
@@ -423,9 +514,19 @@ static void createpostdir(File *parentdir, char* postname, Ndbtuple *cur, Person
 		ax->post.cachefile = cachefile;
 		ax->filename = "content";
 		ax->post.p = p;
+		ax->post.contentfmt = nil;
 
 		createfile(postdir, "content", nil, 0444, ax);
+
+		ax = malloc(sizeof(AuxData));
+		ax->filetype = PostFile;
+		ax->post.cachefile = cachefile;
+		ax->filename = "content.raw";
+		ax->post.p = p;
+		ax->post.contentfmt = nil;
+		createfile(postdir, "content.raw", nil, 0444, ax);
 	}
+
 	if (jsonbyname(jsondata, "summary") != nil) {
 		ax = malloc(sizeof(AuxData));
 		ax->filetype = PostFile;
@@ -434,6 +535,15 @@ static void createpostdir(File *parentdir, char* postname, Ndbtuple *cur, Person
 		ax->post.p = p;
 
 		createfile(postdir, "summary", nil, 0444, ax);
+	}
+	if (jsonbyname(jsondata, "inReplyTo") != nil) {
+		ax = malloc(sizeof(AuxData));
+		ax->filetype = PostFile;
+		ax->post.cachefile = cachefile;
+		ax->filename = "inReplyTo";
+		ax->post.p = p;
+
+		createfile(postdir, "inReplyTo", nil, 0444, ax);
 	}
 }
 
@@ -452,10 +562,6 @@ static void createpostsdir(Ndb *db, File *dir, Person *p) {
 	char datestr[11];
 	File *dateDir = nil;
 	for(;cur != nil;ndbfree(cur), cur = ndbsnext(&s, "attributedTo", p->id)){
-		// only top level posts go in the posts directory
-		if (strcmp(getfirstattr(cur, "inReplyTo"), "null") != 0) {
-			continue;
-		}
 		postname = getfirstattr(cur, "publishedTime");
 
 		assert(postname != nil);
