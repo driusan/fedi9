@@ -135,7 +135,7 @@ void fsread(Req *r){
 		char path[1024];
 		// cachefile is relative to $home/lib/fedi9 so make it absolute
 		sprint(path, "%s/lib/fedi9/%s", getenv("home"), a->post.cachefile);
-		fprint(2, "path: %s\n", path);
+		// fprint(2, "path: %s\n", path);
 		if (strcmp(a->filename, "raw") == 0) {
 			// pass through to cachefile using pread
 			int fd = open(path, OREAD);
@@ -464,6 +464,11 @@ static void createpostsdir(Ndb *db, File *dir, Person *p) {
 			memset(datestr, 0, 11);
 			strncpy(datestr, postname, 10);
 			dateDir = createfile(dir, datestr, nil, DMDIR|0555, nil);
+			if (dateDir == nil){
+				// file might have already existed if dates were
+				// out of order in db, try to walk..
+				dateDir = walkfile(dir, datestr);
+			}
 		}
 		assert(dateDir != nil);
 		
