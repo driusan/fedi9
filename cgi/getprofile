@@ -23,8 +23,26 @@ for (line in `{echo $reqlines}) {
 				contentType='application/ld+json'
 			case *application/activity+json*
 				contentType='application/activity+json'
+			case *text/html*
+				if(test -e /usr/$user/lib/fedi9/profile.html){
+					contentType='text/html'
+				}
+			case '*/*'
+				contentType='application/ld+json; profile="https://www.w3.org/ns/activitystreams"'
 		}
 		echo $line >/sys/log/testing
+	}
+}
+if (~ $contentType text/html){
+	if (test -r /usr/$user/lib/fedi9/profile.html){
+		echo 'Status: 200 OK'
+		echo 'Content-Type: ' $"contentType
+		echo
+		cat /usr/$user/lib/fedi9/profile.html
+		exit ''
+	}
+	if not {
+		contentType='application/ld+json; profile="https://www.w3.org/ns/activitystreams"'
 	}
 }
 if (test -f /usr/$user/lib/fedi9/profile.json){
