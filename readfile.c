@@ -13,13 +13,11 @@ char *readfile(int fd) {
 
 	char *rv = 0;
 	while((n = read(fd, buf, BUFSZ)) > 0) {
-		if (n > 0) {
-			rv = realloc(rv, nrv+n+1);
+		rv = realloc(rv, nrv+n+1);
 	
-			memcpy(&rv[nrv], buf, n);
-			nrv += n;
-			rv[nrv] = 0;
-		}
+		memcpy(&rv[nrv], buf, n);
+		nrv += n;
+		rv[nrv] = 0;
 	}
 	free(buf);
 	return rv;
