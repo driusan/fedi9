@@ -42,9 +42,14 @@ func sign(privateKey crypto.PrivateKey, pubKeyId string, r *http.Request, b []by
 	// Should use something more secure, but Mastodon only supports RSA_SHA256
 	prefs := []httpsig.Algorithm{httpsig.RSA_SHA256, httpsig.RSA_SHA256}
 	digestAlg := httpsig.DigestSha256
-	headersToSign := []string{httpsig.RequestTarget, "date", "digest", "host", "content-type"}
+
+    headersToSign := []string{httpsig.RequestTarget, "date", "digest", "host", "content-type"}
 	if b == nil {
-		headersToSign = []string{httpsig.RequestTarget, "date", "host", "content-type"}
+        if r.Method == "GET" {
+            headersToSign = []string{httpsig.RequestTarget, "date", "host", "accept"}
+        } else {
+            headersToSign = []string{httpsig.RequestTarget, "date", "host", "content-type"}
+        }
 	}
 
 	signer, chosenAlgo, err := httpsig.NewSigner(prefs, digestAlg, headersToSign, httpsig.Signature, 60*60*24*30)

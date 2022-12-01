@@ -1,3 +1,48 @@
 #!/bin/rc
+rfork
 
-hget -r 'Accept: application/ld+json;profile="https://www.w3.org/ns/activitystreams"' $*
+actorsdb=$home/lib/fedi9/actors.db
+
+keyid=`{ndb/query -f $actorsdb self true keyid}
+
+if (~ $"keyid '') {
+	echo Could not determine key id to use >[1=2]
+	exit 'no keyid'
+}
+
+if (~ $"fedidomain '') {
+	echo '$fedidomain not set' >[1=2]
+	exit 'no domain'
+}
+
+url=$1
+
+tmpfile=/tmp/get.$pid
+
+fn sigexit sigint sigquit sighup{
+	rm -f $tmpfile
+}
+#FIXME: Strip host from inbox
+conn=`{cat /mnt/web/clone}
+cd /mnt/web/$"conn
+echo url $"url > /mnt/web/$"conn/ctl
+urlpath=`{cat /mnt/web/$"conn/parsed/path}
+hostdst=`{cat /mnt/web/$"conn/parsed/host}
+now=`{date -u -f 'WW, DD MMM YYYY hh:mm:ss ZZZ'}
+cat >$tmpfile <<EOF
+GET $urlpath HTTP/1.1
+Date: $now
+Accept: application/activity+json
+Host: $hostdst
+
+EOF
+ifs='
+'
+headers=`{fedi9/httpsign -w -p $home/lib/fedi9/privateKey.pem $keyid < $tmpfile}
+
+# echo url https://driusan.net/.well-known/test > /mnt/web/$"conn/ctl
+for (header in $headers) {
+	echo $"header > /mnt/web/$"conn/ctl
+}
+
+cat /mnt/web/$"conn/body

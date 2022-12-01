@@ -28,25 +28,29 @@ shift
 
 switch($type){
 case 'Accept'
-	switch($2) {
-	case Follow
-		if (~ $"3 '') {
+	subtype=$1
+	shift
+	requestID=$1
+	shift
+	switch($subtype) {
+	case 'Follow'
+		if (~ $"requestID '') {
 			echo usage: $0 Accept Follow RequestID >[1=2]
 			exit 'no requestid'
 		}
-		acceptId=`{ndb/query -f $followreqdb id $3 id}
+		acceptId=`{ndb/query -f $followreqdb id $requestID id}
 		if (~ $acceptId '') {
-			echo could not find $3
+			echo could not find $requestID
 			exit 'bad request id'
 		}
 
-		undoId=`{ndb/query -f $undodb id $3}
+		undoId=`{ndb/query -f $undodb id $requestID}
 		if (! ~ $undoId '') {
 			echo can not accept cancelled request >[1=2]
 			exit 'cancelled request'
 		}
-		followActorId=`{ndb/query -f $followreqdb id $3 actor}
-		followObjectId=`{ndb/query -f $followreqdb id $3 object}
+		followActorId=`{ndb/query -f $followreqdb id $requestID actor}
+		followObjectId=`{ndb/query -f $followreqdb id $requestID object}
 		me=`{ndb/query -f $actorsdb self true id}
 		newActivityId='https'://$"fedidomain'/users/'$user'#/followaccept/'`{fedi9/newuuid -n}
 		# It's not clear if this is right if they included other fields in the Follow
@@ -67,7 +71,7 @@ case 'Accept'
 }
 EOF
 	case *
-		echo 'Only know how to accept follows' >[1=2]
+		echo 'Only know how to accept follows, not ' $subtype >[1=2]
 		exit 'bad accept type'
 	}
 	exit ''
