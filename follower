@@ -89,7 +89,7 @@ case accept
 		accepted=`{ndb/query -f $followersdb id $requestor}
 		if (! ~ $accepted '') {
 			echo $requestor is already a follower
-			# exit 'already follower'
+			exit 'already follower'
 		}
 		fedi9/mkactivity Accept Follow $request | fedi9/post $requestor
 		echo id'='$requestor accepted'='true acceptedFrom'='$requestId > $followersdb
