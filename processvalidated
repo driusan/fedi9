@@ -69,6 +69,17 @@ for (file in $files){
 			echo Duplicate Create for $"objid
 			mvToProcessed $file
 		} 
+	case Update
+		echo Update
+		cachepath=`{ndb/query -f $objectsdb id $"objid cachepath}
+		if (~ $cachepath '') {
+			echo 'Update unknown object'
+			mvToProcessed $file
+		}
+		if not {
+			echo $"obj >$cachepath
+			mvToProcessed $file
+		}
 	case 'Delete'
 		echo 'Delete'
 		cachepath=`{ndb/query -f $objectsdb id $"objid cachepath}
