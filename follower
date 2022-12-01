@@ -92,7 +92,7 @@ case accept
 			exit 'already follower'
 		}
 		fedi9/mkactivity Accept Follow $request | fedi9/post $requestor
-		echo id'='$requestor accepted'='true acceptedFrom'='$requestId > $followersdb
+		echo id'='$requestor accepted'='true acceptedFrom'='$requestId >> $followersdb
 	case *
 		echo 'Only raw accept implemented' >[1=2]
 		exit 'bad mode'
