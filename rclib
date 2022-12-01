@@ -1,8 +1,15 @@
 #!/bin/rc
 
-actorsdb=$home/lib/fedi9/actors.db
-followreqdb=$home/lib/fedi9/followreq.db
-followersdb=$home/lib/fedi9/followers.db
+fedi9lib=$home/lib/fedi9
+actorsdb=$fedi9lib/actors.db
+followreqdb=$fedi9lib/followreq.db
+followersdb=$fedi9lib/followers.db
+followingdb=$fedi9lib/following.db
+
+objectsdb=$fedi9lib/objects.db
+
+undodb=$fedi9lib/undo.db
+announcedb=$fedi9lib/announces.db
 
 me=`{ndb/query -f $actorsdb self true id}
 
@@ -44,4 +51,15 @@ fn requiredArray {
 		}
 	}
 	echo ']'
+}
+
+fn addObjectToDb {
+	objectid=$1
+	shift
+	if (~ `{ndb/query $objectsdb id $"objectid} ''){
+		cachepath=objects/^`{echo $objectid | sed -e 's#(http[s]?://)##'}
+		echo mkdir -p $fedi9lib^`{basename -d $cachepath}
+		cat
+
+	}	
 }

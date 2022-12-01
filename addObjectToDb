@@ -1,0 +1,53 @@
+#!/bin/rc
+
+rfork
+
+. /bin/fedi9/rclib
+
+objectid=$1
+shift
+if (~ $objectid ''){
+	echo Missing object id >[1=2]
+	exit 'no object id'
+}
+if (! ~ `{ndb/query -f $objectsdb id $objectid} ''){
+	echo $objectid already in database >[1=2]
+	exit 'already added'
+}
+
+cachepath=objects/^`{echo $objectid | sed -e 's#(http[s]?://)##'}
+mkdir -p $fedi9lib/`{basename -d $cachepath}
+cat > $fedi9lib^/^$cachepath
+filename=$fedi9lib^/^$cachepath
+objtype=`{fedi9/extractkey type < $filename}
+switch($objtype){
+case Note
+	attributedTo=`{fedi9/extractkey attributedTo < $filename}
+	if (~ `"{ndb/query -f $actorsdb id $attributedTo} ''){
+		echo New actor
+		fedi9/get $"attributedTo | fedi9/personrecord >> $actorsdb
+	}
+	if not {
+		echo Attributed to $"attributedTo
+
+	}
+	objUrl=`{fedi9/extractkey url < $filename}
+	inReplyTo=`{jsontype='string|null' fedi9/extractkey inReplyTo < $filename}
+	publishedTime=`{fedi9/extractkey published < $filename}
+	if (~ $"inReplyTo '') {
+		echo 'Could not handle inReplyTo' >[1=2]
+		exit 'unhandled inReplyTo'
+	}
+	cat >> $objectsdb <<EOR
+id=$objectid cachepath=$cachepath
+	attributedTo=$attributedTo
+	inReplyTo=$inReplyTo
+	url=$objUrl
+	publishedTime=$publishedTime
+
+EOR
+case *
+	echo Unhandled object type $"objtype >[1=2]
+	exit 'no object type'
+}
+exit ''

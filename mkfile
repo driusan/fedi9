@@ -19,7 +19,9 @@ RC=\
 	mkobject\
 	post\
 	follower\
-	rclib
+	rclib\
+	getannounces\
+	addObjectToDb
 
 OFILES=readfile.$O uuid.$O outbox.$O
 

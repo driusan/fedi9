@@ -1,0 +1,18 @@
+#!/bin/rc
+
+. /bin/fedi9/rclib
+
+objects=`{ndb/query -f $home/lib/fedi9/announces.db -a type Announce object}
+
+for(object in $objects){
+	exists=false
+	if (! ~ `{ndb/query -f $objectsdb id $"object} ''){
+		exists=true
+	}
+	if (~ $exists true){
+		# echo $"object exists
+	}
+	if not {
+		fedi9/get $"object | fedi9/addObjectToDb $"object
+	}
+}

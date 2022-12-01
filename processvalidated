@@ -1,16 +1,20 @@
 #!/bin/rc
 rfork
 
+. /bin/fedi9/rclib
+
 cd $home/lib/fedi9/inbox/validated
-objectsdb=$home/lib/fedi9/objects.db
-actordb=$home/lib/fedi9/actors.db
-followingdb=$home/lib/fedi9/following.db
-followreqdb=$home/lib/fedi9/followreq.db
-undodb=$home/lib/fedi9/undo.db
+
+exiterror=()
 fn mvToProcessed {
 	base=`{basename $* .body}
 	mkdir -p ../processed
 	mv $base.^(headers body) ../processed/
+}
+
+mkdir -p $home/lib/fedi9/objects
+if (! test -e $home/lib/fedi9/objects.db) {
+	touch $home/lib/fedi9/objects.db
 }
 # Use ls instead of the *.body pattern so that
 # the empty case gets handled correctly
@@ -20,11 +24,11 @@ for (file in $files){
 	fedi9/spamcheck $"file
 
 	actor=`{cat $file | fedi9/extractkey actor}
-	actorobj=`{ndb/query -f $"actordb id $"actor}
+	actorobj=`{ndb/query -f $"actorsdb id $"actor}
 	activityType=`{cat $file | fedi9/extractkey type}
 	if (~ $"actorobj '') {
-		echo New actor $actor in $"actordb
-		fedi9/get $"actor | fedi9/personrecord >> $actordb
+		echo New actor $actor in $"actorsdb
+		fedi9/get $"actor | fedi9/personrecord >> $actorsdb
 	}
 
 	activityType=`{cat $file | fedi9/extractkey type}
@@ -58,6 +62,7 @@ for (file in $files){
 				mvToProcessed $file
 			case *
 				echo Unhandled object type $"objtype >[1=2]
+				exiterror=($exiterror 'no object type')
 			}
 		}
 		if not {
@@ -123,6 +128,7 @@ for (file in $files){
 			}
 		case *
 			echo 'Unhandled Undo of type ' $undotype
+			exiterror=($exiterror 'no undotype')
 		}
 		undoobj=`{echo $"obj | fedi9/extractkey id}
 		if (test -e $undodb) {
@@ -138,11 +144,11 @@ for (file in $files){
 		accepttype=`{echo $"obj | fedi9/extractkey type}
 		switch($"accepttype){
 		case Follow
-			ndbid=`{ndb/query -f $"actordb id $"actor id}
+			ndbid=`{ndb/query -f $"actorsdb id $"actor id}
 			if (~ $"ndbid '') {
 				# We did a fedi9/get for the actor object at the
 				# start of this script, this shouldn't happen
-				echo Could not find $"actor in $"actordb >[1=2]
+				echo Could not find $"actor in $"actorsdb >[1=2]
 				exit 'no actor'
 			}
 
@@ -168,8 +174,40 @@ for (file in $files){
 			mvToProcessed $file
 		case *
 			echo Unhandled Accept type $accepttype >[1=2]
+			exiterror=($exiterror 'no accept type')
+		}
+	case Announce
+		echo Announce
+		actid=`{cat $file | fedi9/extractkey id}
+		publishedTime=`{cat $file|fedi9/extractkey published}
+		obj=`{cat $file | jsontype='string' fedi9/extractkey object}
+		if (~ $"obj ''){
+			echo Could not retrieve announce object >[1=2]
+			exiterror=($exiterror 'bad announce object')
+		}
+		if not{
+			exists=false
+			if (test -e $announcedb){
+				if (! ~ `{ndb/query -f $"announcedb id $"actid id} ''){
+					exists=true
+				}		
+			}
+
+			if (~ $exists false){
+				cat >> $announcedb << EOR
+id=$actid
+	type=Announce
+	cachepath=../inbox/processed/$file
+	actor=$actor
+	object=$obj
+	publishedTime=$publishedTime
+EOR
+			}
+			mvToProcessed $file
 		}
 	case *
 		echo Unhandled activity type $activityType >[1=2]
+		exiterror=($exiterror 'no activity type')
 	}
 }
+exit $"exiterror
