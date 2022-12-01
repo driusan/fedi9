@@ -157,7 +157,6 @@ func getKey(keyId string) (crypto.PublicKey, error) {
 		return nil, err
 	}
 	if actor.PublicKey.Id != keyId {
-
 		return nil, fmt.Errorf("Could not retrieve %v, got %v", keyId, actor.PublicKey.Id)
 	}
 	return parsePemKey(keyId, actor.PublicKey.Owner, []byte(actor.PublicKey.PublicKeyPem), true)
@@ -172,6 +171,11 @@ func getAlgorithm(header string) (httpsig.Algorithm, error) {
 		}
 		val := strings.Replace(s, "algorithm=", "", 1)
 		val = val[1 : len(val)-1]
+        if val == "hs2019" {
+            fmt.Printf("Warning: hs2019\n")
+            return "rsa-sha256", nil
+            // return "", fmt.Errorf("hs2019 algorithm not supported")
+        }
 		/*
 		   this doesn't seem to be working so just assume it's
 		   supported for now
@@ -195,35 +199,35 @@ func main() {
 	f, err := os.Open(os.Args[1])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "err: %v\n", err)
-		os.Exit(1)
+		os.Exit(2)
 	}
 	defer f.Close()
 
 	reader := bufio.NewReader(f)
 	req, err := http.ReadRequest(reader)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "err: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "err1: %v\n", err)
+		os.Exit(3)
 
 	}
 	verifier, err := httpsig.NewVerifier(req)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "err: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "err2: %v\n", err)
+		os.Exit(4)
 	}
 	algorithm, err := getAlgorithm(req.Header.Get("Signature"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "err: %v\n", err)
-		os.Exit(1)
+		os.Exit(5)
 	}
 	pubkey, err := getKey(verifier.KeyId())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "err: %v\n", err)
-		os.Exit(2)
+		os.Exit(6)
 	}
 	if err := verifier.Verify(pubkey, algorithm); err != nil {
 		fmt.Fprintf(os.Stderr, "err: %v\n", err)
-		os.Exit(3)
+		os.Exit(7)
 	}
 	os.Exit(0)
 
