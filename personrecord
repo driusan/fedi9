@@ -1,25 +1,26 @@
 #!/bin/rc
 
-cat > tmp
+tmpfile=/tmp/personrecord.$pid
+cat > $tmpfile
 
 # Section 3.1
 # all objects MUST have unique global identifiers
 # MUST have globally unique id, type
-id=`{cat tmp | fedi9/extractkey id}
-type=`{cat tmp | fedi9/extractkey type}
+id=`{fedi9/extractkey id < $tmpfile}
+type=`{fedi9/extractkey type < $tmpfile}
 
 # MUST have Inbox, outbox
-inbox=`{cat tmp | fedi9/extractkey inbox}
-outbox=`{cat tmp | fedi9/extractkey outbox}
+inbox=`{fedi9/extractkey inbox < $tmpfile}
+outbox=`{fedi9/extractkey outbox < $tmpfile}
 
 # SHOULD HAVE following, followers
-following=`{cat tmp | fedi9/extractkey following}
-followers=`{cat tmp | fedi9/extractkey followers}
+following=`{fedi9/extractkey following < $tmpfile}
+followers=`{fedi9/extractkey followers <$tmpfile}
 
 # These may or may not exist
-preferredUsername=`{cat tmp | fedi9/extractkey preferredUsername}
-name=(`{cat tmp | fedi9/extractkey name})
-rm tmp
+preferredUsername=`{fedi9/extractkey preferredUsername <$tmpfile}
+name=(`{fedi9/extractkey name < $tmpfile})
+rm $tmpfile
 
 uuid=`{fedi9/newuuid}
 
