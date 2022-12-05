@@ -19,6 +19,10 @@ cachepath=objects/^`{echo $objectid | sed -e 's#(http[s]?://)##'}
 mkdir -p $fedi9lib/`{basename -d $cachepath}
 cat > $fedi9lib^/^$cachepath
 filename=$fedi9lib^/^$cachepath
+if (~ `{cat $filename} '') {
+	echo $objectid not found >[1=2]
+	exit 'no object'
+}
 objtype=`{fedi9/extractkey type < $filename}
 switch($objtype){
 case Note

@@ -13,6 +13,7 @@ for(object in $objects){
 		# echo $"object exists
 	}
 	if not {
+		echo Object $"object
 		fedi9/get $"object | fedi9/addObjectToDb $"object
 	}
 }

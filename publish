@@ -92,7 +92,7 @@ case Note
 	}
 	uuid=`{fedi9/newuuid -n}
 	mkdir -p $home/lib/fedi9/notes
-	mkobject $type -id https://$fedidomain/users/$user/notes/$uuid $passthroughobj > $home/lib/fedi9/notes/$uuid 
+	fedi9/mkobject $type -id https://$fedidomain/users/$user/notes/$uuid $passthroughobj > $home/lib/fedi9/notes/$uuid 
 	if (~ $"status '') {
 		# echo Object: https://$fedidomain/users/$user/notes/$uuid Location:$home/lib/fedi9/notes/$uuid
 	}
@@ -100,7 +100,7 @@ case Note
 		echo Could not create object $"status
 	}
 	mkdir -p $home/lib/fedi9/activities
-	mkactivity Create -id https://$fedidomain/users/$user/activites/$uuid Note $passthroughact -objectfile $home/lib/fedi9/notes/$uuid > $home/lib/fedi9/activities/$uuid
+	fedi9/mkactivity Create -id https://$fedidomain/users/$user/activites/$uuid Note $passthroughact -objectfile $home/lib/fedi9/notes/$uuid > $home/lib/fedi9/activities/$uuid
 	if (~ $"status ''){
 		# echo Activity: https://$fedidomain/users/$user/activites/$uuid Location:$home/lib/fedi9/activities/$uuid
 	}

@@ -21,7 +21,8 @@ RC=\
 	follower\
 	rclib\
 	getannounces\
-	addObjectToDb
+	addObjectToDb\
+	publish
 
 OFILES=readfile.$O uuid.$O outbox.$O
 

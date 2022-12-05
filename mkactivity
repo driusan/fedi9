@@ -77,9 +77,9 @@ EOF
 	exit ''
 case 'Follow'
 	me=`{ndb/query -f $actorsdb self true id}
-	them=`{getactorurl $2}
+	them=`{getactorurl $1}
 	if (~ $"them '') {
-		echo 'Could not get' $2 >[1=2]
+		echo 'Could not get' $1 >[1=2]
 		exit 'bad object'
 	}
 	if (~ $"me '') {
