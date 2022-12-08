@@ -11,7 +11,13 @@
 
 typedef struct{
 	enum{JsonType, JsonValue, CtlFile} filetype;
-	JSON *js;
+	union {
+		JSON *js;
+		struct {
+			int nbuf;
+			char *buf;
+		};
+	};
 } AuxData;
 void recreateroot(JSON *js);
 void createjsonfiles(JSON *js, File *root);
@@ -87,19 +93,44 @@ void fsread(Req *r){
 void fswrite(Req *r){
 	AuxData *a = r->fid->file->aux;
 	if (a == nil){
+		r->ofcall.count = 0;
 		respond(r, "bad write");
 		return;	
 	}
-	if(a->filetype != CtlFile){
+	fprint(2, "ifcall size %ud ifcall offset %lld\n", r->ifcall.count, r->ifcall.offset);
+	if(a->filetype != CtlFile ){
+		r->ofcall.count = 0;
 		respond(r, "not ctl file");
 		return;	
 	}
-	JSON *js = jsonparse(r->ifcall.data);
+	JSON *js;
+	if (r->ifcall.offset == 0){
+		js = jsonparse(r->ifcall.data);
+	} else {
+		a->buf = realloc(a->buf, a->nbuf+r->ifcall.count);
+		memmove(&a->buf[a->nbuf], r->ifcall.data, r->ifcall.count);
+		js = jsonparse(a->buf);
+	}
+
 	if (js == nil) {
+		// We want cat foo > /mnt/json/ctl to work for big files, and
+		// cat uses 8192 sized writes.
+		if (r->ifcall.count == 8192) {
+			// cat chunks the writes into 8192, we need to
+			// reconstruct it in aux.
+			a->buf = realloc(a->buf, a->nbuf+8192);
+			memmove(&a->buf[a->nbuf], r->ifcall.data, 8192);
+			a->nbuf += 8192;
+			r->ofcall.count = r->ifcall.count;
+			respond(r, nil);
+			return;
+		}
+		r->ofcall.count = 0;
 		respond(r, "bad json");
 		return;
 	}
 	recreateroot(js);
+	r->ofcall.count = r->ifcall.count;
 	respond(r, nil);
 }
 
@@ -116,9 +147,10 @@ void recreateroot(JSON *js){
 	}
 	AuxData *a = malloc(sizeof(AuxData));
 	a->filetype = CtlFile;
+	a->buf = nil;
+	a->nbuf = 0;
 	createfile(fs.tree->root, "ctl", nil, 0660, a);
 	createjsonfiles(js, fs.tree->root);
-	fprint(2, "Assigning new tree\n");
 }
 void createjsonfiles(JSON *js, File *root) {
 	File *values;
