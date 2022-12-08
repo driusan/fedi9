@@ -6,7 +6,8 @@ TARG=\
 	newuuid\
 	getoutbox\
 	fs\
-	jsonfmt
+	jsonfmt\
+	jsonfs
 
 RC=\
 	personrecord\
@@ -24,9 +25,9 @@ RC=\
 	addObjectToDb\
 	publish
 
-OFILES=readfile.$O uuid.$O outbox.$O
+OFILES=readfile.$O uuid.$O outbox.$O removedir.$O
 
-HFILES=readfile.h uuid.h
+HFILES=readfile.h uuid.h removedir.h
 
 </sys/src/cmd/mkmany
 

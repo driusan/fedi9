@@ -10,6 +10,7 @@
 #include "readfile.h"
 #include "uuid.h"
 #include "outbox.h"
+#include "removedir.h"
 
 typedef char* url_t;
 typedef struct Person {
@@ -82,12 +83,8 @@ static void htmlfmt(AuxData *dst, char *val) {
 		dst->post.contentfmt = readfile(c2p[1]);
 
 		close(c2p[1]);
-	// 	close(fd[0]);
-		
-		// close(fd[0]);
 		wait();
 	}
-	//dst->post.contentfmt = "Test";
 }
 #define BEGINREADACTORFILE if(0) {
 
@@ -143,24 +140,26 @@ static void postrespfromcache(Req *r, char *abspath, char *fieldname) {
 	s = readfile(fd);
 	close(fd);
 	json = jsonparse(s);
+	if (strcmp(fieldname, "content") == 0)	fprint(2, "s: %s\n", s);
 	free(s);
 	if (json == nil) {
 		respond(r, "no json");
 		return;
 	}
-
+	if (strcmp(fieldname, "content") == 0)	fprint(2, "JSON: %J\n", json);
 	// get the field
 	field = jsonbyname(json, fieldname);
 	if (field == nil) {
-		free(json);
+		jsonfree(json);
 		respond(r, "json missing field");
 		return;
 	}
-
+	if (strcmp(fieldname, "content") == 0)	fprint(2, "Field: %J\n\n", field);
 	int slen = strlen(field->s);
+	// fprint(2, "Offset %lld slen: %d count %d  %J\n", r->ifcall.offset, slen, r->ifcall.count, field);
 	// after eof, return 0
 	if (r->ifcall.offset >= slen) {
-		free(json);
+		jsonfree(json);
 		r->ofcall.data = 0;
 		r->ofcall.count = 0;
 		respond(r, nil);
@@ -170,7 +169,7 @@ static void postrespfromcache(Req *r, char *abspath, char *fieldname) {
 	assert(field->t == JSONString);
 	r->ofcall.data = strdup(field->s);
 	r->ofcall.count = strlen(field->s);
-	free(json);
+	jsonfree(json);
 	respond(r, nil);
 	return;
 }
@@ -254,52 +253,6 @@ void fsread(Req *r){
 
 	respond(r, "bad file type");
 	return;
-}
-
-void removedir(File *f, int removeFile) {
-	if (f == nil) {
-		return;
-	}
-	incref(f);
-	Readdir *dir = opendirfile(f);
-	assert(dir != nil);
-	uchar *dbuf = malloc(1024);
-	int n, off=0;
-	while((n = readdirfile(dir, dbuf, 1024, off)) > 0) {
-		fprint(2, "n is %d\n", n);
-		off+=n;
-		Dir d;
-		char *strs = malloc(1024);
-		int remn = n;
-		uchar *p = dbuf;
-		fprint(2, "Inner loop\n");
-		while (remn > 0) {
-			fprint(2, "convM2D\n");
-			int y = convM2D(p, n, &d, strs);
-			fprint(2, "convM2D length: %d, remn: %d\n", y, remn);
-			if (d.name != nil) {
-				fprint(2, "Remove %s\n", d.name);
-				File *child = walkfile(f, d.name);
-				incref(child);
-				fprint(2, "Checking if dir\n");
-				if ((d.mode & DMDIR) != 0) {
-					fprint(2, "Recursing into %s\n", d.name);
-					removedir(child, 1);
-				} else {
-					fprint(2, "Removing non-dir\n");
-					assert(removefile(child) == 0);
-				}
-			
-			}
-			p+= y;
-			remn -= y;
-		}
-		free(strs);
-	}
-	closedirfile(dir);
-	if (removeFile)	assert(removefile(f) == 0);
-	free(dbuf);
-
 }
 
 void actorctlwrite(Req *r) {
