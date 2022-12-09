@@ -1,32 +1,41 @@
 #!/bin/rc
 
-tmpfile=/tmp/personrecord.$pid
-cat > $tmpfile
+rfork
+fedi9/jsonfs
+
+fn getStringKey {
+	if (test -e /mnt/json/values/$1/value){
+		cat /mnt/json/values/$1/value
+	}
+}
+cat > /mnt/json/ctl
 
 # Section 3.1
 # all objects MUST have unique global identifiers
 # MUST have globally unique id, type
-id=`{fedi9/extractkey id < $tmpfile}
-type=`{fedi9/extractkey type < $tmpfile}
+id=`{getStringKey id}
+type=`{cat /mnt/json/values/type/value}
 
 # MUST have Inbox, outbox
-inbox=`{fedi9/extractkey inbox < $tmpfile}
-outbox=`{fedi9/extractkey outbox < $tmpfile}
+inbox=`{getStringKey inbox}
+outbox=`{getStringKey outbox}
 
 # SHOULD HAVE following, followers
-following=`{fedi9/extractkey following < $tmpfile}
-followers=`{fedi9/extractkey followers <$tmpfile}
+following=`{getStringKey following}
+followers=`{getStringKey followers}
 
 # These may or may not exist
-preferredUsername=`{fedi9/extractkey preferredUsername <$tmpfile}
-name=(`{fedi9/extractkey name < $tmpfile})
-rm $tmpfile
+preferredUsername=`{getStringKey preferredUsername}
+name=`{getStringKey name}
 
-uuid=`{fedi9/newuuid}
+cat <<EOP
+id=$id type=$type
+	inbox=$inbox outbox=$outbox
+	following=$following followers=$followers
+	preferredUsername="$preferredUsername"
+	name="$name"
+EOP
 
-echo id'='$id type'='$type
-echo '	' inbox'='$inbox outbox'='$outbox
-echo '	' following'='$following followers'='$followers
-echo '	' preferredUsername'="'$"preferredUsername"
-echo '	' name'="'$"name"
-echo '	' uuid'='$"uuid
+if (~ `{cat /mnt/json/values/icon/values/type/value >[2]/dev/null} Image){
+		echo '	profileIcon='`{cat /mnt/json/values/icon/values/url/value}
+}
