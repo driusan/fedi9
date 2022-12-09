@@ -97,7 +97,6 @@ void fswrite(Req *r){
 		respond(r, "bad write");
 		return;	
 	}
-	fprint(2, "ifcall size %ud ifcall offset %lld\n", r->ifcall.count, r->ifcall.offset);
 	if(a->filetype != CtlFile ){
 		r->ofcall.count = 0;
 		respond(r, "not ctl file");
