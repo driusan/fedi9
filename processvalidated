@@ -40,11 +40,13 @@ for (file in $files){
 		objid=`{echo $"obj | fedi9/extractkey id}
 		echo $"obj | fedi9/addObjectToDb $objid
 		addStatus=$status
-		if (~ $"addStatus ''){
+		switch($addStatus){
+		case ''
 			mvToProcessed $file
-		}
-		if not {
-			echo Could not add object $objid to database: $"addStatus >[1=2]
+		case *'already added'
+			mvToProcessed $file
+		case *
+			echo Could not add object $objid to database: "$"addStatus" >[1=2]
 		}
 	case Update
 		echo Update
@@ -54,7 +56,11 @@ for (file in $files){
 			mvToProcessed $file
 		}
 		if not {
-			echo $"obj >$cachepath
+			if (! test -e $fedi9lib/$cachepath) {
+				echo 'Path ' $cachepath does not exist >[1=2]
+			}
+
+			echo $"obj >$fedi9lib/$cachepath
 			mvToProcessed $file
 		}
 	case 'Delete'
