@@ -15,40 +15,54 @@ if (! ~ `{ndb/query -f $objectsdb id $objectid} ''){
 	exit 'already added'
 }
 
+fn getStringKey {
+	if (test -e /mnt/json/values/$1/value){
+		cat /mnt/json/values/$1/value
+	}
+}
 cachepath=objects/^`{echo $objectid | sed -e 's#(http[s]?://)##'}
 mkdir -p $fedi9lib/`{basename -d $cachepath}
-cat > $fedi9lib^/^$cachepath
+
+fedi9/jsonfs 
+cat > /mnt/json/ctl
 filename=$fedi9lib^/^$cachepath
-if (~ `{cat $filename} '') {
-	echo $objectid not found >[1=2]
-	exit 'no object'
-}
-objtype=`{fedi9/extractkey type < $filename}
+
+objtype=`{getStringKey type}
 switch($objtype){
 case Note
-	attributedTo=`{fedi9/extractkey attributedTo < $filename}
+	attributedTo=`{getStringKey attributedTo}
 	if (~ `"{ndb/query -f $actorsdb id $attributedTo} ''){
 		echo New actor
 		fedi9/get $"attributedTo | fedi9/personrecord >> $actorsdb
 	}
 	if not {
 		echo Attributed to $"attributedTo
+	}
+	objUrl=`{getStringKey url}
+	if (test -e /mnt/json/values/inReplyTo/type){
+		switch(`{cat /mnt/json/values/inReplyTo/jsontype}){
+		case string
+			inReplyTo=`{cat /mnt/json/values/inReplyTo/value}
+		case null
+			inReplyTo=null
+		case *
+			echo 'Could not handle inReplyTo type' >[1=2]
+			exit 'unhandled inReplyTo'
 
+		}
 	}
-	objUrl=`{fedi9/extractkey url < $filename}
-	inReplyTo=`{jsontype='string|null' fedi9/extractkey inReplyTo < $filename}
-	publishedTime=`{fedi9/extractkey published < $filename}
-	if (~ $"inReplyTo '') {
-		echo 'Could not handle inReplyTo' >[1=2]
-		exit 'unhandled inReplyTo'
+	if not {
+		inReplyTo=null
 	}
+	publishedTime=`{getStringKey published}
+	cp /mnt/json/raw $"filename
+
 	cat >> $objectsdb <<EOR
 id=$objectid cachepath=$cachepath
 	attributedTo=$attributedTo
 	inReplyTo=$inReplyTo
 	url=$objUrl
 	publishedTime=$publishedTime
-
 EOR
 case *
 	echo Unhandled object type $"objtype >[1=2]

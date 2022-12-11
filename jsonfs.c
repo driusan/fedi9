@@ -10,7 +10,7 @@
 #include "removedir.h"
 
 typedef struct{
-	enum{JsonType, JsonValue, CtlFile} filetype;
+	enum{JsonType, JsonValue, JsonRaw, CtlFile} filetype;
 	union {
 		JSON *js;
 		struct {
@@ -19,6 +19,7 @@ typedef struct{
 		};
 	};
 } AuxData;
+
 void recreateroot(JSON *js);
 void createjsonfiles(JSON *js, File *root);
 
@@ -29,6 +30,14 @@ void fsread(Req *r){
 		return;	
 	}
 	switch(a->filetype){
+	case JsonRaw:
+		{
+		char *str = smprint("%J", a->js);
+		readstr(r, str);
+		free(str);
+		respond(r, nil);
+		return;
+		}
 	case JsonType:
 		switch(a->js->t){
 		case JSONNull:
@@ -134,9 +143,19 @@ Srv fs = {
 	.write = fswrite,
 };
 
+void destroyfile(File *f) {
+	AuxData *a = f->aux;
+	if (a == nil){
+		return;
+	}
+	if (a->filetype == CtlFile){
+		free(a->buf);
+	}
+	free(f->aux);
+}
 void recreateroot(JSON *js){
 	if (fs.tree == nil) {
-		fs.tree = alloctree(nil, nil, DMDIR|0555, nil);
+		fs.tree = alloctree(nil, nil, DMDIR|0555, destroyfile);
 	} else{
 		removedir(fs.tree->root, 0);
 	}
@@ -147,13 +166,25 @@ void recreateroot(JSON *js){
 	createfile(fs.tree->root, "ctl", nil, 0660, a);
 	createjsonfiles(js, fs.tree->root);
 }
+
 void createjsonfiles(JSON *js, File *root) {
 	File *values;
 	incref(root);
 	AuxData *a = malloc(sizeof(AuxData));
 	a->filetype = JsonType;
 	a->js = js;
+	incref(root);
 	createfile(root, "jsontype", nil, 0444, a);
+
+	
+	AuxData *b = malloc(sizeof(AuxData));
+	b->filetype = JsonRaw;
+	b->js = js;
+	incref(root);
+
+	incref(root);
+	createfile(root, "raw", nil, 0444, b);
+
 	switch(js->t) {
 	case JSONNull: break;
 	case JSONBool:
@@ -193,7 +224,8 @@ void createjsonfiles(JSON *js, File *root) {
 }
 
 void main(void){
-	char *tmp = "{ \"foo\" : \"bar\", \"arr\" : [234.3, true, null]}";
+	char *tmp = "{}";
+	JSONfmtinstall();
 	JSON *js = jsonparse(tmp);
 	recreateroot(js);
 
