@@ -1,9 +1,14 @@
 #!/bin/rc
 rfork
 
-type=`{cat $1 | fedi9/extractkey type}
-actor=`{cat $1 | fedi9/extractkey actor}
-msgto=`{cat $1 | fedi9/extractkey to}
+. /bin/fedi9/rclib
+
+fedi9/jsonfs
+cat $1 >/mnt/json/ctl
+
+type=`{getStringKey type}
+actor=`{getStringKey actor}
+msgto=`{cat /mnt/json/values/to/values/0/value}
 
 if (~ $"type 'Delete') {
 	if (~ $"msgto 'https://www.w3.org/ns/activitystreams#Public') {
