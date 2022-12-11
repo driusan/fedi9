@@ -53,13 +53,8 @@ fn requiredArray {
 	echo ']'
 }
 
-fn addObjectToDb {
-	objectid=$1
-	shift
-	if (~ `{ndb/query $objectsdb id $"objectid} ''){
-		cachepath=objects/^`{echo $objectid | sed -e 's#(http[s]?://)##'}
-		echo mkdir -p $fedi9lib^`{basename -d $cachepath}
-		cat
-
-	}	
+fn getStringKey {
+	if (test -e /mnt/json/values/$1/value){
+		cat /mnt/json/values/$1/value
+	}
 }

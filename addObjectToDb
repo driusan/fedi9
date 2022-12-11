@@ -15,16 +15,18 @@ if (! ~ `{ndb/query -f $objectsdb id $objectid} ''){
 	exit 'already added'
 }
 
-fn getStringKey {
-	if (test -e /mnt/json/values/$1/value){
-		cat /mnt/json/values/$1/value
-	}
-}
+
+
 cachepath=objects/^`{echo $objectid | sed -e 's#(http[s]?://)##'}
 mkdir -p $fedi9lib/`{basename -d $cachepath}
 
 fedi9/jsonfs 
 cat > /mnt/json/ctl
+
+if (! ~ $objectid `{getStringKey id}){
+	echo Object id does not match id >[1=2]
+	exit 'bad object id'
+}
 filename=$fedi9lib^/^$cachepath
 
 objtype=`{getStringKey type}
@@ -56,6 +58,7 @@ case Note
 	}
 	publishedTime=`{getStringKey published}
 	cp /mnt/json/raw $"filename
+	chmod 0644 $"filename
 
 	cat >> $objectsdb <<EOR
 id=$objectid cachepath=$cachepath
@@ -63,9 +66,50 @@ id=$objectid cachepath=$cachepath
 	inReplyTo=$inReplyTo
 	url=$objUrl
 	publishedTime=$publishedTime
+	type=Note
 EOR
+case Question
+	attributedTo=`{getStringKey attributedTo}
+	if (~ `"{ndb/query -f $actorsdb id $attributedTo} ''){
+		echo New actor
+		fedi9/get $"attributedTo | fedi9/personrecord >> $actorsdb
+	}
+	if not {
+		echo Attributed to $"attributedTo
+	}
+	objUrl=`{getStringKey url}
+	if (test -e /mnt/json/values/inReplyTo/type){
+		switch(`{cat /mnt/json/values/inReplyTo/jsontype}){
+		case string
+			inReplyTo=`{cat /mnt/json/values/inReplyTo/value}
+		case null
+			inReplyTo=null
+		case *
+			echo 'Could not handle inReplyTo type' >[1=2]
+			exit 'unhandled inReplyTo'
+
+		}
+	}
+	if not {
+		inReplyTo=null
+	}
+	publishedTime=`{getStringKey published}
+	endTime=`{getStringKey endTime}
+	cp /mnt/json/raw $"filename
+	chmod 0644 $"filename
+
+	cat >> $objectsdb <<EOR
+id=$objectid cachepath=$cachepath
+	attributedTo=$attributedTo
+	inReplyTo=$inReplyTo
+	url=$objUrl
+	publishedTime=$publishedTime
+	endTime=$endTime
+	type=Question
+EOR
+
 case *
 	echo Unhandled object type $"objtype >[1=2]
-	exit 'no object type'
+	exit 'unknown object type'
 }
 exit ''

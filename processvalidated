@@ -22,34 +22,38 @@ files=`{ls *.body >[2]/dev/null}
 for (file in $files){
 	echo File $file
 	fedi9/spamcheck $"file
-
-	actor=`{cat $file | fedi9/extractkey actor}
+	fedi9/jsonfs
+	cat $file > /mnt/json/ctl
+	actor=`{getStringKey actor}
 	actorobj=`{ndb/query -f $"actorsdb id $"actor}
-	activityType=`{cat $file | fedi9/extractkey type}
+	activityType=`{getStringKey type}
 	if (~ $"actorobj '') {
 		echo New actor $actor in $"actorsdb
 		fedi9/get $"actor | fedi9/personrecord >> $actorsdb
 	}
 
-	activityType=`{cat $file | fedi9/extractkey type}
-
 	switch ($activityType){
 	case 'Create'
 		echo 'Create'
-		obj=`{fedi9/extractkey object < $file}
-		objid=`{echo $"obj | fedi9/extractkey id}
-		echo $"obj | fedi9/addObjectToDb $objid
-		addStatus=$status
-		switch($addStatus){
-		case ''
-			mvToProcessed $file
-		case *'already added'
-			mvToProcessed $file
-		case *
-			echo Could not add object $objid to database: "$"addStatus" >[1=2]
+		if (! test -e /mnt/json/values/object/values/id/value){
+			echo Could not determine object id >[1=2]
+		}
+		if not {
+			objid=`{cat /mnt/json/values/object/values/id/value}
+			cat /mnt/json/values/object/raw | fedi9/addObjectToDb $objid
+			addStatus=$status
+			switch($addStatus){
+			case ''
+				mvToProcessed $file
+			case *'already added'
+				mvToProcessed $file
+			case *
+				echo Could not add object $objid to database: "$"addStatus" >[1=2]
+			}
 		}
 	case Update
 		echo Update
+		objid=`{cat /mnt/json/values/object/values/id/value}
 		cachepath=`{ndb/query -f $objectsdb id $"objid cachepath}
 		if (~ $cachepath '') {
 			echo 'Update unknown object'
@@ -59,34 +63,34 @@ for (file in $files){
 			if (! test -e $fedi9lib/$cachepath) {
 				echo 'Path ' $cachepath does not exist >[1=2]
 			}
-
-			echo $"obj >$fedi9lib/$cachepath
+			cp /mnt/json/values/object/raw $fedi9lib/$cachepath
 			mvToProcessed $file
 		}
 	case 'Delete'
 		echo 'Delete'
+		objid=`{cat /mnt/json/values/object/values/id/value}
 		cachepath=`{ndb/query -f $objectsdb id $"objid cachepath}
 		if (~ $cachepath '') {
 			echo 'Delete unknown object'
 			mvToProcessed $file
 		}
 		if not {
-			objtype=`{echo $"obj | fedi9/extractkey type}
+			objtype=`{cat /mnt/json/values/object/values/type/value}
 			if(~ $"objtype 'Tombstone'){
-				echo $"obj >$cachepath
+				cp /mnt/json/values/object/raw $fedi9lib/$cachepath
 				mvToProcessed $file
 			}
 			if not {
-				echo '{}' >$cachepath
+				echo '{}' >$fedi9lib/$cachepath
 				mvToProcessed $file
 			}
 		}
 	case 'Follow'
 		echo 'Follow'
-		reqid=`{cat $file | fedi9/extractkey id}
+		reqid=`{getStringKey id}
 		cachedreq=`{ndb/query -f $followreqdb id $"reqid id}
 		if (~ $"cachedreq '') {
-			obj=`{cat $file | fedi9/extractkey object}
+			obj=`{getStringKey object}
 			echo 'id='$"reqid ' actor='$"actor 'object='$"obj >> $"followreqdb
 			mvToProcessed $file
 		}
@@ -96,13 +100,10 @@ for (file in $files){
 		}
 	case 'Undo'
 		echo 'Undo'
-		obj=`{cat $file | fedi9/extractkey object}
-		
-		undotype=`{echo $"obj | fedi9/extractkey type}
+		undotype=`{cat /mnt/json/values/object/values/type/value}
 		switch($"undotype){
 		case 'Follow'
-			# subobj=`{echo $"obj | fedi9/extractkey object}
-			reqid=`{echo $"obj | fedi9/extractkey id}
+			reqid=`{cat /mnt/json/values/object/values/id/value}
 			if (test -e $undodb) {
 				cachedreq=`{ndb/query -f $undodb id $"reqid id}
 			}
@@ -110,9 +111,8 @@ for (file in $files){
 				cachedreq=''
 			}
 			if (~ $"cachedreq '') {
-				reqid=`{echo $"obj | fedi9/extractkey id}
-				actor=`{echo $"obj | fedi9/extractkey actor}
-				objectid=`{echo $"obj | fedi9/extractkey actor}
+				actor=`{cat /mnt/json/values/object/values/actor/value}
+				objectid=`{cat /mnt/json/values/object/values/object/value}
 				echo 'id='$reqid ' actor='$"actor' object='$"objectid' type='$"undotype >> $undodb
 				mvToProcessed $file
 			}
@@ -124,18 +124,9 @@ for (file in $files){
 			echo 'Unhandled Undo of type ' $undotype
 			exiterror=($exiterror 'no undotype')
 		}
-		undoobj=`{echo $"obj | fedi9/extractkey id}
-		if (test -e $undodb) {
-			cachedreq=`{ndb/query -f $undodb id $"reqid id}
-		}
-		if not {
-			cachedreq=''
-		}
 	case Accept
 		echo 'Accept'
-		obj=`{cat $file | fedi9/extractkey object}
-		
-		accepttype=`{echo $"obj | fedi9/extractkey type}
+		accepttype=`{cat /mnt/json/values/object/values/type/value}
 		switch($"accepttype){
 		case Follow
 			ndbid=`{ndb/query -f $"actorsdb id $"actor id}
@@ -172,9 +163,9 @@ for (file in $files){
 		}
 	case Announce
 		echo Announce
-		actid=`{cat $file | fedi9/extractkey id}
-		publishedTime=`{cat $file|fedi9/extractkey published}
-		obj=`{cat $file | jsontype='string' fedi9/extractkey object}
+		actid=`{getStringKey id}
+		publishedTime=`{getStringKey published}
+		obj=`{getStringKey object}
 		if (~ $"obj ''){
 			echo Could not retrieve announce object >[1=2]
 			exiterror=($exiterror 'bad announce object')
