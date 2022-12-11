@@ -112,20 +112,16 @@ void fswrite(Req *r){
 	}
 
 	if (js == nil) {
-		// We want cat foo > /mnt/json/ctl to work for big files, and
-		// cat uses 8192 sized writes.
-		if (r->ifcall.count == 8192) {
-			// cat chunks the writes into 8192, we need to
-			// reconstruct it in aux.
-			a->buf = realloc(a->buf, a->nbuf+8192);
-			memmove(&a->buf[a->nbuf], r->ifcall.data, 8192);
-			a->nbuf += 8192;
-			r->ofcall.count = r->ifcall.count;
-			respond(r, nil);
-			return;
-		}
-		r->ofcall.count = 0;
-		respond(r, "bad json");
+		// We want large files to work. cat uses 8192 byte chunks, but
+		// fedi9/get uses arbitrary sizes depending on what came in over
+		// the wire depending on what webfs sends it. We just claim the
+		// write succeeded and add it to a buffer in aux, assuming another
+		// write will come in that makes it valid json.
+		a->buf = realloc(a->buf, a->nbuf+r->ifcall.count);
+		memmove(&a->buf[a->nbuf], r->ifcall.data, r->ifcall.count);
+		a->nbuf += r->ifcall.count;
+		r->ofcall.count = r->ifcall.count;
+		respond(r, nil);
 		return;
 	}
 	recreateroot(js);
