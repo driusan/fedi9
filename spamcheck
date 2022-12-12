@@ -12,7 +12,7 @@ msgto=`{cat /mnt/json/values/to/values/0/value}
 
 if (~ $"type 'Delete') {
 	if (~ $"msgto 'https://www.w3.org/ns/activitystreams#Public') {
-		actorObj=`{ndb/query -f $home/lib/fedi9/following.db id $"actor}
+		actorObj=`{ndb/query -f $actorsdb id $"actor}
 		if (~ $"actorObj '') {
 			exit 'spam'
 		}

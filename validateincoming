@@ -5,9 +5,15 @@ cd $home/lib/fedi9/inbox
 
 for (file in `{ls *.headers}) {
 	base=`{basename $file .headers}
-	fedi9/validatehttpsig $file
-	validatestatus=$status
-	switch ($"validatestatus){
+	fedi9/spamcheck $"base.body
+	if(~ $status *spam){
+		echo Moving $base to spam >[1=2]
+		mv $"base.^(headers body) spam/
+	}
+	if not {
+		fedi9/validatehttpsig $file
+		validatestatus=$status
+		switch ($"validatestatus){
 		case ''
 			echo 'Validated'
 			mkdir -p validated
@@ -20,5 +26,6 @@ for (file in `{ls *.headers}) {
 		case *
 			echo Other $"validatestatus
 
+		}
 	}
 }

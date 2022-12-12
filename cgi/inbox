@@ -6,29 +6,39 @@ if (~ $"PATH_INFO /users/*) {
 	username=`{echo $"PATH_INFO |  sed 's#^/users/([^/]+)/.*$#\1#'}
 }
 
+# Home must be set for spamcheck
+home=/usr/$username
+fedidomain=$SERVER_NAME
+
 if (~ $REQUEST_METHOD POST){
 	# Use the time with nanosecond precision in a way that collates increasingly. 
 	filename=/usr/$username/lib/fedi9/inbox/`{date -f 'YYYY-MM-DD-hh:mm:ss.nnnnn'}
 	
 	mkdir -p /usr/$username/lib/fedi9/inbox/
-
 	echo $"REQUEST_METHOD $"REQUEST_URI$"QUERYSTRING HTTP/1.1 >$"filename.headers
 	echo $"reqlines >> $"filename.headers
 	cat >$filename.body
 	fedi9/spamcheck $"filename.body
-	if(~ $status '') {
+	spamstatus=$status
+	switch($spamstatus){
+	case ''
 		echo 'Status: 202 Accepted'
 		echo 'Content-Type: application/json'
 		echo
 		echo '{ "okay" : "got it" }'
 		exit ''
-	}
-	if not {
-		rm -f $"filename.^(headers body)
-		echo 'Status: 400 Bad Request'
+	case *spam
+		mv $"filename.^(headers body) /usr/$username/lib/fedi9/inbox/spam
+		echo 'Status: 200 OK'
 		echo 'Content-Type: application/json'
 		echo
-		echo '{ "error" : "could not verify http signature" }'
+		echo '{ "okay" : "I believe you." }'
+		exit ''
+	case *
+		echo 'Status: 500 Internal Server Error'
+		echo 'Content-Type: application/json'
+		echo
+		echo '{ "error" : "Something went wrong." }'
 		exit ''
 	}
 }
