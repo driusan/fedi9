@@ -4,30 +4,62 @@ rfork
 
 . /bin/fedi9/rclib
 
+while(~ $1 -*){
+	switch($1){
+	case -g
+		getobject=true
+	case -u
+		updateobject=true
+	case *
+		echo Unhandled option $1 >[1=2]
+	}
+	shift
+}
 objectid=$1
 shift
+
 if (~ $objectid ''){
 	echo Missing object id >[1=2]
 	exit 'no object id'
 }
-if (! ~ `{ndb/query -f $objectsdb id $objectid} ''){
-	echo $objectid already in database >[1=2]
-	exit 'already added'
+if (~ $updateobject true) {
+	cachepath=`{ndb/query -f $objectsdb id $objectid cachepath}
+	if (~ $"cachepath ''){
+		echo can not determine cachepath of $objectid to update >[1=2]
+		updateobject=false
+	}
+}
+if not {
+	if (! ~ `{ndb/query -f $objectsdb id $objectid} ''){
+		echo $objectid already in database >[1=2]
+		exit 'already added'
+	}
 }
 
+if (~ $"cachepath ''){
+	cachepath=objects/^`{echo $objectid | sed -e 's#(http[s]?://)##'}
+	mkdir -p $fedi9lib/`{basename -d $cachepath}
+}
 
+fedi9/jsonfs
 
-cachepath=objects/^`{echo $objectid | sed -e 's#(http[s]?://)##'}
-mkdir -p $fedi9lib/`{basename -d $cachepath}
-
-fedi9/jsonfs 
-cat > /mnt/json/ctl
-
+if (~ $getobject true){
+	fedi9/get $objectid > /mnt/json/ctl
+}
+if not {
+	cat > /mnt/json/ctl
+}
 if (! ~ $objectid `{getStringKey id}){
 	echo Object id does not match id >[1=2]
 	exit 'bad object id'
 }
 filename=$fedi9lib^/^$cachepath
+
+if (~ $updateobject true){
+	cp /mnt/json/raw $"filename
+	chmod 0644 $"filename
+	exit ''
+}
 
 objtype=`{getStringKey type}
 switch($objtype){
@@ -41,7 +73,7 @@ case Note
 		echo Attributed to $"attributedTo
 	}
 	objUrl=`{getStringKey url}
-	if (test -e /mnt/json/values/inReplyTo/type){
+	if (test -e /mnt/json/values/inReplyTo/jsontype){
 		switch(`{cat /mnt/json/values/inReplyTo/jsontype}){
 		case string
 			inReplyTo=`{cat /mnt/json/values/inReplyTo/value}
