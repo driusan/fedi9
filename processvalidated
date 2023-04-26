@@ -101,8 +101,17 @@ for (file in $files){
 	case 'Undo'
 		echo 'Undo'
 		undotype=`{cat /mnt/json/values/object/values/type/value}
+		knowntype='false'
 		switch($"undotype){
 		case 'Follow'
+			knowntype='true'
+		case 'Announce'
+			knowntype='true'
+		case *
+			echo 'Unhandled Undo of type ' $undotype
+			exiterror=($exiterror 'no undotype')
+		}
+		if (~ $"knowntype 'true') {
 			reqid=`{cat /mnt/json/values/object/values/id/value}
 			if (test -e $undodb) {
 				cachedreq=`{ndb/query -f $undodb id $"reqid id}
@@ -120,9 +129,6 @@ for (file in $files){
 				echo 'Already processed Undo' >[2=1]
 				mvToProcessed $file
 			}
-		case *
-			echo 'Unhandled Undo of type ' $undotype
-			exiterror=($exiterror 'no undotype')
 		}
 	case Accept
 		echo 'Accept'
