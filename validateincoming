@@ -18,6 +18,11 @@ for (file in `{ls *.headers}) {
 			echo 'Validated'
 			mkdir -p validated
 			mv $"base.^(headers body) validated
+		case *': 6'
+			echo 'Spam'
+			# couldn't get key, was delete spam
+			mkdir -p spam
+			mv $"base.^(headers body) spam
 		case *': 2'
 			echo 'Spam'
 			# couldn't get key, was delete spam
