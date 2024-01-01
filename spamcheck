@@ -8,6 +8,9 @@ cat $1 >/mnt/json/ctl
 
 type=`{getStringKey type}
 actor=`{getStringKey actor}
+if (! test -f /mnt/json/values/to/values/0/value){
+	exit ''
+}
 msgto=`{cat /mnt/json/values/to/values/0/value}
 
 if (~ $"type 'Delete') {
