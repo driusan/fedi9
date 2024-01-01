@@ -196,6 +196,49 @@ EOR
 			}
 			mvToProcessed $file
 		}
+	case Add
+		echo Add
+		obj=`{getStringKey object}
+		target=`{getStringKey target}
+		if (~ $"target '' || ~ $"obj ''){
+			echo Could not determine Add target or object>[1=2]
+			exiterror=($exiterror 'no add target')
+		}
+
+		cachepath=`{ndb/query -f $collectionsdb id $"target cachepath}
+
+		if (~ $cachepath '') {
+			cname=`{echo $"target | sha1sum -2 256}
+			cname=$cname(1)
+			echo 'id='$"target ' cachepath=collections/'$cname >> $collectionsdb
+
+			mkdir -p $fedi9lib/collections/$"cname
+			cachepath='collections/'$cname
+			# mvToProcessed $file
+		}
+		fname=`{echo $"obj | sha1sum -2 256}
+		fname=$fname(1)
+		echo $"obj > $fedi9lib/$cachepath/$fname
+		mvToProcessed $file
+	case Remove
+		echo Remove
+		obj=`{getStringKey object}
+		target=`{getStringKey target}
+		if (~ $"target '' || ~ $"obj ''){
+			echo Could not determine Remove target or object>[1=2]
+			exiterror=($exiterror 'no remove target')
+		}
+		cachepath=`{ndb/query -f $collectionsdb id $"target cachepath}
+		if (~ $cachepath '') {
+			echo 'Remove from unknown collection' $"target
+
+		}
+		if not {
+			fname=`{echo $"obj | sha1sum -2 256}
+			fname=$fname(1)
+			rm -f $fedi9lib/$cachepath/$fname
+		}
+		mvToProcessed $file
 	case *
 		echo Unhandled activity type $activityType >[1=2]
 		exiterror=($exiterror 'no activity type')

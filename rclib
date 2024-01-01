@@ -11,6 +11,9 @@ objectsdb=$fedi9lib/objects.db
 undodb=$fedi9lib/undo.db
 announcedb=$fedi9lib/announces.db
 
+collectionsdb=$fedi9lib/collections.db
+collectionsdir=$fedi9lib/collections
+
 me=`{ndb/query -f $actorsdb self true id}
 
 if (~ $"fedidomain '') {
