@@ -5,15 +5,12 @@
 objects=`{ndb/query -f $home/lib/fedi9/announces.db -a type Announce object}
 
 for(object in $objects){
-	exists=false
-	if (! ~ `{ndb/query -f $objectsdb id $"object} ''){
-		exists=true
-	}
-	if (~ $exists true){
-		# echo $"object exists
+	if (! ~ `{ndb/query -f $deaddb id $"object} ''){
+		# echo Skipping $"object
 	}
 	if not {
-		echo Object $"object
-		fedi9/get $"object | fedi9/addObjectToDb $"object
+		if (~ `{ndb/query -f $objectsdb id $"object} ''){
+			fedi9/addObjectToDb -g $"object
+		}
 	}
 }

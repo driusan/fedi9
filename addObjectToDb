@@ -50,7 +50,8 @@ if not {
 	cat > /mnt/json/ctl
 }
 if (! ~ $objectid `{getStringKey id}){
-	echo Object id does not match id >[1=2]
+	echo Object id does not match id ($objectid) >[1=2]
+	echo 'id='$"objectid 'valid=false' >> $deaddb
 	exit 'bad object id'
 }
 filename=$fedi9lib^/^$cachepath

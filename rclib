@@ -7,6 +7,7 @@ followersdb=$fedi9lib/followers.db
 followingdb=$fedi9lib/following.db
 
 objectsdb=$fedi9lib/objects.db
+deaddb=$fedi9lib/dead.objects.db
 
 undodb=$fedi9lib/undo.db
 announcedb=$fedi9lib/announces.db
