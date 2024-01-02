@@ -2,15 +2,9 @@
 
 . /bin/fedi9/rclib
 
-objects=`{ndb/query -f $home/lib/fedi9/announces.db -a type Announce object}
+objects=`{fedi9/newannounces}
 
 for(object in $objects){
-	if (! ~ `{ndb/query -f $deaddb id $"object} ''){
-		# echo Skipping $"object
-	}
-	if not {
-		if (~ `{ndb/query -f $objectsdb id $"object} ''){
-			fedi9/addObjectToDb -g $"object
-		}
-	}
+	echo $"object
+	fedi9/addObjectToDb -g $"object
 }

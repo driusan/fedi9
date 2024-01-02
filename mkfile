@@ -6,7 +6,8 @@ TARG=\
 	getoutbox\
 	fs\
 	jsonfmt\
-	jsonfs
+	jsonfs\
+	newannounces
 
 RC=\
 	personrecord\

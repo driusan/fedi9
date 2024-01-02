@@ -145,4 +145,5 @@ case *
 	echo Unhandled object type $"objtype >[1=2]
 	exit 'unknown object type'
 }
+ndb/mkhash $objectsdb id
 exit ''
