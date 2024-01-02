@@ -3,7 +3,7 @@ rfork
 
 cd $home/lib/fedi9/inbox
 
-for (file in `{ls *.headers}) {
+for (file in `{ls *.headers >[2]/dev/null}) {
 	base=`{basename $file .headers}
 	fedi9/spamcheck $"base.body
 	if(~ $status *spam){

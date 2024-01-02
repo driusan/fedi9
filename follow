@@ -1,0 +1,36 @@
+#!/bin/rc
+
+. /bin/fedi9/rclib
+
+me=`{ndb/query -f $actorsdb self true id}
+if (~ $"me '') {
+	echo 'Could not determine identity'
+}
+
+displayMode=raw
+while (~ $1 -*) {
+	switch ($1){
+	case -m
+		shift
+		displayMode=$1
+		shift
+	}
+}
+subcommand=$1
+shift
+
+switch($subcommand) {
+case request
+	person=$1
+	shift
+	if (~ $"person ''){
+		echo 'Missing person to follow' >[1=2]
+		exit 'no requestee'
+	}
+	fedi9/mkactivity Follow $"person | fedi9/post $"person
+	echo 'id='$"person >> $followingdb
+	exit ''
+case *
+	echo Unknown verb $subcommand >[1=2]
+	exit 'bad command'
+}

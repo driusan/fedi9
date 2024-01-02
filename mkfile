@@ -19,6 +19,7 @@ RC=\
 	mkobject\
 	post\
 	follower\
+	follow\
 	rclib\
 	getannounces\
 	addObjectToDb\
