@@ -140,7 +140,20 @@ id=$objectid cachepath=$cachepath
 	endTime=$endTime
 	type=Question
 EOR
-
+case Video
+	cat >> $objectsdb <<EOR
+id=$objectid cachepath=$cachepath
+	type=Video
+EOR
+case Like
+	attributedTo=`{getStringKey actor}
+	obj=`{getStringKey object}
+	cat >> $objectsdb <<EOR
+id=$objectid cachepath=$cachepath
+	type=Like
+	actor=$actor
+	object=$obj
+EOR
 case *
 	echo Unhandled object type $"objtype >[1=2]
 	exit 'unknown object type'

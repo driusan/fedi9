@@ -239,6 +239,12 @@ EOR
 			rm -f $fedi9lib/$cachepath/$fname
 		}
 		mvToProcessed $file
+	case Like
+		# echo $"objid
+		likeid=`{getStringKey id}
+		cat /mnt/json/raw | fedi9/addObjectToDb $"likeid
+		
+		 mvToProcessed $file
 	case *
 		echo Unhandled activity type $activityType >[1=2]
 		exiterror=($exiterror 'no activity type')
