@@ -139,6 +139,11 @@ void fswrite(Req *r){
 		return;
 	}
 	recreateroot(js);
+	// The JSON was parsed and the root recreated, free the buffer and clear
+	// it for the next write to ctl
+	free(a->buf);
+	a->buf = nil;
+	a->nbuf = 0;
 	r->ofcall.count = r->ifcall.count;
 	respond(r, nil);
 }

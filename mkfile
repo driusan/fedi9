@@ -25,7 +25,8 @@ RC=\
 	rclib\
 	getannounces\
 	addObjectToDb\
-	publish
+	publish\
+	getreplies
 
 OFILES=readfile.$O uuid.$O outbox.$O removedir.$O fmt.$O utils.$O
 
