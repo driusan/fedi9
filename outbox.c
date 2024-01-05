@@ -8,6 +8,8 @@
 #include "readfile.h"
 #include "uuid.h"
 #include "outbox.h"
+#include "utils.h"
+
 
 int openwebfs(int *fd) {
 	char buf[1000];
@@ -50,14 +52,6 @@ static int idexists(Ndb *db, char *val) {
 	return t != 0;
 }
 
-static char * getfieldstr(JSON* data, char* field) {
-	JSON* fieldj = jsonbyname(data, field);
-	if (fieldj) {
-		assert(fieldj->t == JSONString);
-		return strdup(fieldj->s);
-	}
-	return nil;
-}
 
 static void freenoteobject(NoteObject *n) {
 	free(n->internaluuid);

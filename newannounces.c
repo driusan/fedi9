@@ -30,6 +30,7 @@ rm $deaddb.id
 #include <bio.h>
 #include <ndb.h>
 
+Ndb* actordb;
 Ndb* getdb(char *name){
 	char *fullname = smprint("%s/lib/fedi9/%s.db", getenv("home"), name);
 	Ndb* db = ndbopen(fullname);

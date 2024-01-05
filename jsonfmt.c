@@ -2,6 +2,11 @@
 #include <libc.h>
 #include <json.h>
 
+#include <bio.h>
+#include <ndb.h>
+
+Ndb *actordb;
+
 #include "readfile.h"
 
 void main(int argc, char *argv[]) {

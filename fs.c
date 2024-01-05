@@ -11,7 +11,9 @@
 #include "uuid.h"
 #include "outbox.h"
 #include "removedir.h"
+#include "utils.h"
 
+Ndb *actordb;
 typedef char* url_t;
 typedef struct Person {
 	url_t id;
@@ -366,23 +368,6 @@ void printperson(Person p) {
 	
 }
 
-static char* geturlhostname(char *url) {
-	// we're too lazy to parse the url so we just let webfs
-	// do it.
-	char buf[1000];
-	int fd = open("/mnt/web/clone", ORDWR);
-	int n = read(fd, buf, 1000);
-	assert(n > 0);
-	int conn = atoi(buf);
-	fprint(fd, "url %s\n", url);
-	sprint(buf, "/mnt/web/%d/parsed/host", conn);
-	int fd2 = open(buf, OREAD);
-	char *result = readfile(fd2);
-	close(fd2);
-	close(fd);
-	return result;
-}
-
 char* friendlyName(Person *p) {
 	char *hostname = geturlhostname(p->id);
 	char *s;
@@ -606,7 +591,7 @@ void threadmain(int argc, char *argv[]) {
 	fmtinstall('U', Ufmt);
 	fmtinstall('N', Nfmt);
 	JSONfmtinstall();
-	Ndb *actordb = ndbopen(actordbfile);
+	actordb = ndbopen(actordbfile);
 	if (actordb == nil) {
 		fprint(2, "Could not open %s", actordbfile);
 		exits("no actor db");

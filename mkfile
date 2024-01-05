@@ -7,7 +7,8 @@ TARG=\
 	fs\
 	jsonfmt\
 	jsonfs\
-	newannounces
+	newannounces\
+	json2mail
 
 RC=\
 	personrecord\
@@ -26,9 +27,9 @@ RC=\
 	addObjectToDb\
 	publish
 
-OFILES=readfile.$O uuid.$O outbox.$O removedir.$O
+OFILES=readfile.$O uuid.$O outbox.$O removedir.$O fmt.$O utils.$O
 
-HFILES=readfile.h uuid.h removedir.h
+HFILES=readfile.h uuid.h removedir.h fmt.h utils.h
 
 </sys/src/cmd/mkmany
 

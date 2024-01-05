@@ -1,7 +1,11 @@
 #include <u.h>
 #include <libc.h>
+#include <bio.h>
+#include <ndb.h>
+
 #include "uuid.h"
 
+Ndb* actordb;
 void main(int argc, char *argv[]) {
 	uuid_t* u = newuuid();
 	int newline = 1;

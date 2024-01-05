@@ -9,6 +9,11 @@
 
 #include "removedir.h"
 
+#include <bio.h>
+#include <ndb.h>
+
+Ndb* actordb;
+
 typedef struct{
 	enum{JsonType, JsonValue, JsonRaw, CtlFile} filetype;
 	union {

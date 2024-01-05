@@ -8,6 +8,7 @@
 #include "readfile.h"
 #include "uuid.h"
 #include "outbox.h"
+Ndb *actordb;
 
 void main(int argc, char *argv[]) {
 	if (argc != 2) {
